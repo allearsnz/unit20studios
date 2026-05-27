@@ -1,0 +1,388 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ------------------------------------------------------------------ *
+ * Unit 20 — brand tokens
+ * Source of truth: design-system/MASTER.md
+ * Dark mode only at MVP. No light/dark toggle.
+ * ------------------------------------------------------------------ */
+:root {
+  --bg: #0a0a0a; /* off-black, not pure black */
+  --bg-elev: #141414; /* raised surfaces */
+  --bg-elev-2: #1f1f1f; /* cards, modals */
+  --text: #f5f1ea; /* warm off-white */
+  --text-muted: #8a8580;
+  --text-dim: #5c5856;
+  --accent: #3ddc97; /* washed sea green */
+  --accent-hover: #2ec785;
+  --accent-glow: rgba(61, 220, 151, 0.15);
+  --border: rgba(245, 241, 234, 0.08);
+  --border-strong: rgba(245, 241, 234, 0.15);
+  --danger: #e5484d;
+
+  color-scheme: dark;
+}
+
+/* Map brand tokens to Tailwind utilities (bg-bg, text-accent, border-border, …) */
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-elev: var(--bg-elev);
+  --color-bg-elev-2: var(--bg-elev-2);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-text-dim: var(--text-dim);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-glow: var(--accent-glow);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-danger: var(--danger);
+
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
+}
+
+/* Static design tokens: type scale (fluid), tracking, easing */
+@theme {
+  --text-display: clamp(3.5rem, 2.4rem + 4.5vw, 6rem);
+  --text-display--line-height: 1.02;
+  --text-h1: clamp(2.5rem, 1.9rem + 2.65vw, 4rem);
+  --text-h1--line-height: 1.05;
+  --text-h2: clamp(1.75rem, 1.45rem + 1.33vw, 2.5rem);
+  --text-h2--line-height: 1.1;
+  --text-h3: clamp(1.25rem, 1.15rem + 0.45vw, 1.5rem);
+  --text-h3--line-height: 1.2;
+  --text-body: clamp(1rem, 0.98rem + 0.1vw, 1.0625rem);
+  --text-body--line-height: 1.55;
+  --text-meta: clamp(0.8125rem, 0.8rem + 0.06vw, 0.875rem);
+  --text-meta--line-height: 1.4;
+
+  --tracking-display: -0.03em;
+  --tracking-tightish: -0.02em;
+  --tracking-meta: 0.05em;
+
+  /* Mechanical, precise. Entries 300–450ms. */
+  --ease-mech: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Master hub panel transition, 650ms. */
+  --ease-panel: cubic-bezier(0.83, 0, 0.17, 1);
+}
+
+/* ------------------------------------------------------------------ *
+ * Base
+ * ------------------------------------------------------------------ */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "ss01", "ss03", "cv11";
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Themed scrollbar — keeps the dark editorial mood */
+  * {
+    scrollbar-color: var(--border-strong) transparent;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Components / semantic typography + primitives
+ * ------------------------------------------------------------------ */
+@layer components {
+  .container-page {
+    width: 100%;
+    max-width: 1280px;
+    margin-inline: auto;
+    padding-inline: 1.25rem;
+  }
+  @media (min-width: 768px) {
+    .container-page {
+      padding-inline: 2rem;
+    }
+  }
+
+  /* Small mono uppercase eyebrow */
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: var(--text-meta);
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-display);
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+    font-variation-settings: "opsz" 144;
+  }
+  .h1 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-h1);
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    font-variation-settings: "opsz" 110;
+  }
+  .h2 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-h2);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    font-variation-settings: "opsz" 72;
+  }
+  .h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-h3);
+    line-height: 1.2;
+    letter-spacing: -0.01em;
+    font-variation-settings: "opsz" 40;
+  }
+  .lead {
+    font-size: var(--text-body);
+    line-height: 1.6;
+    color: var(--text-muted);
+  }
+  .mono {
+    font-family: var(--font-mono);
+    font-feature-settings: normal;
+  }
+
+  /* Animated underline link — left-to-right wipe, no fade */
+  .link {
+    position: relative;
+    color: inherit;
+    text-decoration: none;
+  }
+  .link::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -2px;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s var(--ease-mech);
+  }
+  .link:hover::after,
+  .link:focus-visible::after {
+    transform: scaleX(1);
+  }
+
+  /* Buttons — 4px corners, never pill, never rounded-xl */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    height: 3rem;
+    padding-inline: 1.5rem;
+    border-radius: 4px;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    font-size: 0.9375rem;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      background-color 0.3s var(--ease-mech),
+      border-color 0.3s var(--ease-mech),
+      color 0.3s var(--ease-mech),
+      transform 0.3s var(--ease-mech);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
+    background: var(--accent-hover);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--border-strong);
+  }
+  .btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .btn:disabled,
+  .btn[aria-disabled="true"] {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Inputs — single bottom border, editorial */
+  .input {
+    width: 100%;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border-strong);
+    padding: 0.625rem 0;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    transition: border-color 0.3s var(--ease-mech);
+  }
+  .input::placeholder {
+    color: var(--text-dim);
+  }
+  .input:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+  }
+  .input[aria-invalid="true"] {
+    border-bottom-color: var(--danger);
+  }
+
+  /* Cards — 1px border, no shadow, subtle hover lift */
+  .card {
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    transition:
+      border-color 0.3s var(--ease-mech),
+      transform 0.3s var(--ease-mech);
+  }
+  .card-hover:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+  }
+
+  /* Hairline rule */
+  .rule {
+    height: 1px;
+    background: var(--border);
+    border: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * Reduced motion — disable all non-essential motion globally.
+ * 3D scene + gyroscope are bypassed in component code as well.
+ * ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Utility to fully hide scrollbars on the scroll-snap mobile hub */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ------------------------------------------------------------------ *
+ * Master hub
+ * Layout is CSS-driven so it works with JS disabled and stays static
+ * under reduced motion (expansion lives only inside no-preference).
+ * ------------------------------------------------------------------ */
+@layer components {
+  .hub-title {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: clamp(2.5rem, 1.6rem + 4.6vw, 4.5rem);
+    line-height: 1;
+    letter-spacing: -0.03em;
+    font-variation-settings: "opsz" 120;
+  }
+}
+
+.hub-panel {
+  width: 100%;
+}
+.hub-bg {
+  transform: translate(var(--gyro-x, 0px), var(--gyro-y, 0px));
+  transition: transform 800ms var(--ease-panel);
+  will-change: transform;
+}
+
+@media (min-width: 768px) {
+  .hub-panel {
+    width: 50%;
+    transition: width 650ms var(--ease-panel);
+  }
+}
+
+/* Hover / keyboard-focus expansion — desktop, motion allowed only */
+@media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+  .hub:hover .hub-panel,
+  .hub:focus-within .hub-panel {
+    width: 38%;
+  }
+  .hub:hover .hub-panel:hover,
+  .hub:focus-within .hub-panel:focus-within {
+    width: 62%;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .hub-panel:hover .hub-bg,
+  .hub-panel:focus-within .hub-bg {
+    transform: translate(var(--gyro-x, 0px), var(--gyro-y, 0px)) scale(1.04);
+  }
+}
+
+/* Radix accordion (FAQ + booking terms) */
+@keyframes acc-down {
+  from {
+    height: 0;
+  }
+  to {
+    height: var(--radix-accordion-content-height);
+  }
+}
+@keyframes acc-up {
+  from {
+    height: var(--radix-accordion-content-height);
+  }
+  to {
+    height: 0;
+  }
+}
+.acc-content[data-state="open"] {
+  animation: acc-down 0.3s var(--ease-mech);
+}
+.acc-content[data-state="closed"] {
+  animation: acc-up 0.3s var(--ease-mech);
+}
