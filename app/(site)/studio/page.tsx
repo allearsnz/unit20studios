@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Clock, MapPin, Users } from "lucide-react";
+import { ParallaxPhoto } from "@/components/studio/ParallaxPhoto";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { PRICING_TIERS, calcPriceCents } from "@/lib/pricing";
@@ -111,24 +111,12 @@ export default function StudioPage() {
             </dl>
           </div>
 
-          <div className="relative order-first h-[40vh] overflow-hidden md:order-none md:h-[70vh]">
-            <Image
-              src="/cdjstudio.webp"
-              alt="Pioneer DJ CDJ-3000 and DJM-A9 mixer in the Unit 20 booth"
-              fill
-              priority
-              sizes="(min-width: 768px) 45vw, 100vw"
-              className="object-cover"
-            />
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(180deg, rgba(10,10,10,0.15) 0%, rgba(10,10,10,0.0) 30%, rgba(10,10,10,0.35) 100%)",
-              }}
-              aria-hidden
-            />
-          </div>
+          <ParallaxPhoto
+            src="/cdjstudio.webp"
+            alt="Pioneer DJ CDJ-3000 and DJM-A9 mixer in the Unit 20 booth"
+            priority
+            className="relative order-first h-[40vh] md:order-none md:h-[70vh]"
+          />
         </div>
       </section>
 
