@@ -7,6 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { primaryNav, type NavLink } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { Wordmark } from "./Wordmark";
 
 export function Header() {
   const pathname = usePathname();
@@ -69,14 +70,8 @@ export function Header() {
       )}
     >
       <div className="container-page flex h-16 items-center justify-between md:h-20">
-        <Link href="/" className="group flex items-center gap-2.5" aria-label="Unit 20 — home">
-          <span
-            className="block h-2 w-2 bg-accent transition-transform duration-300 group-hover:rotate-45"
-            aria-hidden
-          />
-          <span className="font-mono text-sm font-medium uppercase tracking-meta text-text">
-            Unit 20
-          </span>
+        <Link href="/" className="flex items-center" aria-label="Unit 20 — home">
+          <Wordmark className="w-[96px] md:w-[108px]" priority />
         </Link>
 
         <nav className="hidden items-center gap-8 md:flex" aria-label="Primary">

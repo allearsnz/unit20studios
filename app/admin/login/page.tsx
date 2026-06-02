@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Wordmark } from "@/components/layout/Wordmark";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -41,9 +42,9 @@ export default function AdminLoginPage() {
   return (
     <div className="flex min-h-dvh items-center justify-center p-6">
       <form onSubmit={submit} className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2.5">
-          <span className="block h-2 w-2 bg-accent" aria-hidden />
-          <span className="font-mono text-sm uppercase tracking-meta text-text">Unit 20 · Admin</span>
+        <div className="mb-8 flex items-center gap-3">
+          <Wordmark className="w-[96px]" />
+          <span className="font-mono text-[11px] uppercase tracking-meta text-text-dim">Admin</span>
         </div>
         <h1 className="h2 text-text">Sign in</h1>
         <p className="lead mt-2 text-sm">Staff access only.</p>

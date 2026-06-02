@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Panel, type HubPanel } from "./Panel";
 import { GyroParallax } from "./GyroParallax";
 import { site } from "@/lib/site";
@@ -14,6 +16,7 @@ const PANELS: HubPanel[] = [
     kind: "studio",
     tagline: "Book the booth, or hire the gear.",
     cta: "Enter",
+    image: "/studio.png",
     gradient:
       "radial-gradient(120% 120% at 18% 92%, rgba(61,220,151,0.18), transparent 55%), linear-gradient(180deg, #0d0d0d 0%, #0a0a0a 100%)",
   },
@@ -24,17 +27,31 @@ const PANELS: HubPanel[] = [
     kind: "venue",
     external: true,
     tagline: "Nights, launches & shows.",
-    cta: "unit20.nz",
+    cta: "Enter (unit20.nz existing site)",
+    image: "/venue.jpeg",
     gradient:
       "radial-gradient(100% 100% at 78% 100%, rgba(229,72,77,0.15), transparent 55%), linear-gradient(180deg, #130d0f 0%, #0a0a0a 100%)",
   },
 ];
 
 export function Hub() {
+  const router = useRouter();
+  const reduce = useReducedMotion();
   const containerRef = useRef<HTMLUListElement>(null);
-  const [active, setActive] = useState<number | null>(null);
   const [section, setSection] = useState(0);
+  const [diving, setDiving] = useState(false);
 
+  // "Dive in" transition for the internal Studio panel — fade to black, then go.
+  const dive = (href: string) => {
+    if (reduce) {
+      router.push(href);
+      return;
+    }
+    setDiving(true);
+    setTimeout(() => router.push(href), 480);
+  };
+
+  // Track which panel is in view on mobile (for the indicator dots)
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -42,9 +59,7 @@ export function Hub() {
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
-          if (e.isIntersecting) {
-            setSection(Number(e.target.getAttribute("data-index")));
-          }
+          if (e.isIntersecting) setSection(Number(e.target.getAttribute("data-index")));
         }
       },
       { root: el, threshold: 0.5 },
@@ -70,9 +85,8 @@ export function Hub() {
             key={panel.index}
             panel={panel}
             index={i}
-            active={active === i}
-            onActivate={() => setActive(i)}
-            onDeactivate={() => setActive((prev) => (prev === i ? null : prev))}
+            priority={i === 0}
+            onNavigate={panel.external ? undefined : () => dive(panel.href)}
           />
         ))}
       </ul>
@@ -88,15 +102,36 @@ export function Hub() {
             aria-current={section === i ? "true" : undefined}
             className={cn(
               "h-2.5 w-2.5 rounded-full border transition-colors duration-300",
-              section === i
-                ? "border-accent bg-accent"
-                : "border-border-strong bg-transparent",
+              section === i ? "border-accent bg-accent" : "border-border-strong bg-transparent",
             )}
           />
         ))}
       </div>
 
       <GyroParallax containerRef={containerRef} />
+
+      {/* dive-to-black transition into /studio */}
+      <AnimatePresence>
+        {diving ? (
+          <motion.div
+            key="dive"
+            aria-hidden
+            className="fixed inset-0 z-[150] flex items-center justify-center bg-bg"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.45, ease: [0.83, 0, 0.17, 1] }}
+          >
+            <motion.img
+              src="/unit20-logo.png"
+              alt=""
+              className="h-auto w-[150px] md:w-[190px]"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4, delay: 0.08 }}
+            />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

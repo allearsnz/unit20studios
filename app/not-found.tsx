@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
+import { Wordmark } from "@/components/layout/Wordmark";
 
 export default function NotFound() {
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-6 py-24 text-center">
-      <Link href="/" className="mb-12 flex items-center gap-2.5" aria-label="Unit 20 — home">
-        <span className="block h-2 w-2 bg-accent" aria-hidden />
-        <span className="font-mono text-sm uppercase tracking-meta text-text">Unit 20</span>
+      <Link href="/" className="mb-12 flex items-center" aria-label="Unit 20 — home">
+        <Wordmark className="w-[136px]" />
       </Link>
 
       <p className="eyebrow">Error 404</p>

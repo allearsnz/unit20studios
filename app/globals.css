@@ -38,21 +38,23 @@
   --color-border-strong: var(--border-strong);
   --color-danger: var(--danger);
 
-  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  /* Display = brand mono (PP Supply Mono via --font-supply; Geist Mono stand-in) */
+  --font-display: var(--font-supply), ui-monospace, "SF Mono", monospace;
   --font-sans: var(--font-inter), system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains), ui-monospace, "SF Mono", monospace;
 }
 
 /* Static design tokens: type scale (fluid), tracking, easing */
 @theme {
-  --text-display: clamp(3.5rem, 2.4rem + 4.5vw, 6rem);
-  --text-display--line-height: 1.02;
-  --text-h1: clamp(2.5rem, 1.9rem + 2.65vw, 4rem);
-  --text-h1--line-height: 1.05;
-  --text-h2: clamp(1.75rem, 1.45rem + 1.33vw, 2.5rem);
-  --text-h2--line-height: 1.1;
-  --text-h3: clamp(1.25rem, 1.15rem + 0.45vw, 1.5rem);
-  --text-h3--line-height: 1.2;
+  /* Mono runs wider than serif, so display sizes are tuned down vs a serif scale */
+  --text-display: clamp(2.5rem, 1.9rem + 2.9vw, 4rem);
+  --text-display--line-height: 1.05;
+  --text-h1: clamp(2.1rem, 1.7rem + 1.8vw, 3rem);
+  --text-h1--line-height: 1.08;
+  --text-h2: clamp(1.5rem, 1.3rem + 0.9vw, 2rem);
+  --text-h2--line-height: 1.15;
+  --text-h3: clamp(1.2rem, 1.1rem + 0.4vw, 1.4rem);
+  --text-h3--line-height: 1.25;
   --text-body: clamp(1rem, 0.98rem + 0.1vw, 1.0625rem);
   --text-body--line-height: 1.55;
   --text-meta: clamp(0.8125rem, 0.8rem + 0.06vw, 0.875rem);
@@ -134,33 +136,29 @@
     font-family: var(--font-display);
     font-weight: 600;
     font-size: var(--text-display);
-    line-height: 1.02;
-    letter-spacing: -0.03em;
-    font-variation-settings: "opsz" 144;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
   }
   .h1 {
     font-family: var(--font-display);
     font-weight: 600;
     font-size: var(--text-h1);
-    line-height: 1.05;
-    letter-spacing: -0.03em;
-    font-variation-settings: "opsz" 110;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
   }
   .h2 {
     font-family: var(--font-display);
     font-weight: 600;
     font-size: var(--text-h2);
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    font-variation-settings: "opsz" 72;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
   }
   .h3 {
     font-family: var(--font-display);
     font-weight: 600;
     font-size: var(--text-h3);
-    line-height: 1.2;
+    line-height: 1.25;
     letter-spacing: -0.01em;
-    font-variation-settings: "opsz" 40;
   }
   .lead {
     font-size: var(--text-body);
@@ -320,11 +318,10 @@
 @layer components {
   .hub-title {
     font-family: var(--font-display);
-    font-weight: 600;
-    font-size: clamp(2.5rem, 1.6rem + 4.6vw, 4.5rem);
-    line-height: 1;
-    letter-spacing: -0.03em;
-    font-variation-settings: "opsz" 120;
+    font-weight: 500;
+    font-size: clamp(2.25rem, 1.6rem + 3vw, 4rem);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
   }
 }
 
@@ -385,4 +382,54 @@
 }
 .acc-content[data-state="closed"] {
   animation: acc-up 0.3s var(--ease-mech);
+}
+
+/* ------------------------------------------------------------------ *
+ * Intro overlay — diagonal light sweep across the logo
+ * Lifecycle (show/exit) lives in components/transition/IntroOverlay.
+ * The sweep itself is plain CSS keyframes (most reliable).
+ * ------------------------------------------------------------------ */
+.intro-mask {
+  position: relative;
+  overflow: hidden;
+  width: clamp(170px, 44vw, 264px);
+  aspect-ratio: 955 / 211;
+  -webkit-mask: url("/unit20-logo.png") center / contain no-repeat;
+  mask: url("/unit20-logo.png") center / contain no-repeat;
+}
+.intro-base {
+  position: absolute;
+  inset: 0;
+  background: #b8b2a8;
+}
+.intro-sweep {
+  position: absolute;
+  inset: -40% 0 -40% 0;
+  width: 70%;
+  background: linear-gradient(
+    110deg,
+    transparent 25%,
+    rgba(255, 255, 255, 1) 50%,
+    transparent 75%
+  );
+  transform: translateX(-150%);
+  animation: u20-sweep 1.4s cubic-bezier(0.45, 0.05, 0.55, 0.95) 0.2s forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-sweep {
+    animation: none;
+    display: none;
+  }
+}
+@keyframes u20-sweep {
+  to {
+    transform: translateX(220%);
+  }
+}
+@keyframes u20-intro-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
 }

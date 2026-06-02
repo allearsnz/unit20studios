@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { footerNav, site } from "@/lib/site";
+import { Wordmark } from "./Wordmark";
 
 export function Footer() {
   const year = new Date().getFullYear();
@@ -37,11 +38,8 @@ export function Footer() {
         {/* Columns */}
         <div className="grid grid-cols-2 gap-x-6 gap-y-10 py-12 md:grid-cols-[1.4fr_repeat(3,1fr)]">
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5" aria-label="Unit 20 — home">
-              <span className="block h-2 w-2 bg-accent" aria-hidden />
-              <span className="font-mono text-sm font-medium uppercase tracking-meta">
-                Unit 20
-              </span>
+            <Link href="/" className="flex items-center" aria-label="Unit 20 — home">
+              <Wordmark className="w-[124px]" />
             </Link>
             <p className="lead mt-4 max-w-xs text-balance">
               A practice studio, hire house and venue in central Christchurch.

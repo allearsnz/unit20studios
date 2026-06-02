@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import { Hub } from "@/components/master-hub/Hub";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { site } from "@/lib/site";
@@ -72,12 +73,16 @@ export default function HomePage() {
     <>
       <JsonLd data={organizationLd} />
 
-      {/* minimal brand mark — not a nav; the hub is purely a 2-way selector */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center pt-7">
-        <span className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.32em] text-text-muted">
-          <span className="block h-1.5 w-1.5 bg-accent" aria-hidden />
-          Unit 20
-        </span>
+      {/* brand mark — the hub is purely a 2-way selector, no nav */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-40 flex justify-center pt-7 md:pt-9">
+        <Image
+          src="/unit20-logo.png"
+          alt="Unit 20"
+          width={150}
+          height={33}
+          priority
+          className="h-auto w-[116px] opacity-95 md:w-[150px]"
+        />
       </div>
 
       <main id="main">

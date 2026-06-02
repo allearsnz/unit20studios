@@ -8,14 +8,14 @@ import { breadcrumbLd } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "The room — inside the Unit 20 booth",
   description:
-    "Inside the Unit 20 studio: twin CDJ-3000s, a DJM-A9, treated walls and honest monitoring in a low-lit central Christchurch booth built to feel like the club.",
+    "Inside the Unit 20 studio: four CDJ-3000s, a DJM-A9, QSC monitoring and treated walls in a low-lit central Christchurch booth built to feel like the club.",
   alternates: { canonical: "/studio/the-room" },
 };
 
 const SPECS = [
-  { k: "Players", v: "2× Pioneer CDJ-3000" },
+  { k: "Players", v: "4× Pioneer CDJ-3000" },
   { k: "Mixer", v: "Pioneer DJM-A9" },
-  { k: "Monitoring", v: "Full-range active monitors" },
+  { k: "Monitoring", v: "QSC K12.2 + JBL EON618S sub" },
   { k: "Capacity", v: "Up to 10 people" },
   { k: "Connectivity", v: "USB · rec out · aux in" },
   { k: "Hours", v: "07:00 – 24:00, 7 days" },

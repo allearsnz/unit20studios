@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Clock, MapPin, Users } from "lucide-react";
-import { CDJStage } from "@/components/three/CDJStage";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { PRICING_TIERS, calcPriceCents } from "@/lib/pricing";
@@ -10,7 +10,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "The Studio — practice on real club gear",
   description:
-    "A DJ practice studio in central Christchurch: twin Pioneer CDJ-3000s, a club mixer and honest monitoring. Book by the hour, 7am–midnight, from $35/hr off-peak.",
+    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 7am–midnight, from $35/hr off-peak.",
   alternates: { canonical: "/studio" },
   openGraph: { title: "Unit 20 — The Studio", url: "/studio" },
 };
@@ -18,18 +18,18 @@ export const metadata: Metadata = {
 const GEAR = [
   {
     n: "01",
-    name: "2× Pioneer CDJ-3000",
-    spec: "The flagship multiplayers. 9-inch touchscreens, beat jump, key sync — the exact decks you'll meet in the booth.",
+    name: "4× Pioneer CDJ-3000",
+    spec: "Four flagship multiplayers, all linked — 9-inch touchscreens, beat jump, key sync. A full wall of the exact decks you'll meet in any club booth.",
   },
   {
     n: "02",
     name: "Pioneer DJM-A9",
-    spec: "Club-standard four-channel mixer. Learn the board that actually runs the night, not a controller approximation.",
+    spec: "The club-standard four-channel mixer at the centre of it. Learn the board that actually runs the night, not a controller approximation.",
   },
   {
     n: "03",
-    name: "Honest monitoring",
-    spec: "Full-range monitors tuned to tell the truth. Mix at volume and hear every transition land — or not.",
+    name: "QSC K12.2 + JBL EON618S",
+    spec: "QSC K12.2 powered tops (12-inch, 2000W) over a JBL EON618S 18-inch sub. Full-range, club-loud, and honest enough to hear every transition land — or not.",
   },
   {
     n: "04",
@@ -78,7 +78,7 @@ export default function StudioPage() {
               by the hour.
             </h1>
             <p className="lead mt-6 max-w-md">
-              A proper DJ booth — twin CDJ-3000s, a club mixer, monitoring that
+              A proper DJ booth — four CDJ-3000s, a club mixer, monitoring that
               doesn&apos;t flatter you. Practice a set, record a mix, or teach a
               mate. Come alone or bring the crew.
             </p>
@@ -111,43 +111,29 @@ export default function StudioPage() {
             </dl>
           </div>
 
-          <div className="relative order-first h-[40vh] md:order-none md:h-[70vh]">
-            <CDJStage className="absolute inset-0" />
+          <div className="relative order-first h-[40vh] overflow-hidden md:order-none md:h-[70vh]">
+            <Image
+              src="/cdjstudio.webp"
+              alt="Pioneer DJ CDJ-3000 and DJM-A9 mixer in the Unit 20 booth"
+              fill
+              priority
+              sizes="(min-width: 768px) 45vw, 100vw"
+              className="object-cover"
+            />
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(10,10,10,0.15) 0%, rgba(10,10,10,0.0) 30%, rgba(10,10,10,0.35) 100%)",
+              }}
+              aria-hidden
+            />
           </div>
         </div>
       </section>
 
-      {/* the kit */}
-      <Section>
-        <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
-          <SectionHeading
-            eyebrow="The kit"
-            title="The same gear, every session."
-            lead="No surprises and nothing to relearn. What's in the room is what's in the club."
-          />
-          <ul className="-mt-2">
-            {GEAR.map((g) => (
-              <li
-                key={g.n}
-                className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 border-t border-border py-6 first:border-t-0 md:gap-x-8"
-              >
-                <span className="font-mono text-meta tracking-meta text-text-dim">
-                  {g.n}
-                </span>
-                <div>
-                  <h3 className="font-display text-h3 font-semibold text-text">
-                    {g.name}
-                  </h3>
-                  <p className="lead mt-2 max-w-md text-pretty">{g.spec}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </Section>
-
       {/* pricing snippet */}
-      <Section className="border-t border-border">
+      <Section>
         <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
           <SectionHeading
             eyebrow="Pricing"
@@ -182,6 +168,35 @@ export default function StudioPage() {
               </div>
             </div>
           ))}
+        </div>
+      </Section>
+
+      {/* the kit */}
+      <Section className="border-t border-border">
+        <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
+          <SectionHeading
+            eyebrow="The kit"
+            title="The same gear, every session."
+            lead="No surprises and nothing to relearn. What's in the room is what's in the club."
+          />
+          <ul className="-mt-2">
+            {GEAR.map((g) => (
+              <li
+                key={g.n}
+                className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1 border-t border-border py-6 first:border-t-0 md:gap-x-8"
+              >
+                <span className="font-mono text-meta tracking-meta text-text-dim">
+                  {g.n}
+                </span>
+                <div>
+                  <h3 className="font-display text-h3 font-semibold text-text">
+                    {g.name}
+                  </h3>
+                  <p className="lead mt-2 max-w-md text-pretty">{g.spec}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
         </div>
       </Section>
 

@@ -16,8 +16,8 @@ export const metadata: Metadata = {
 
 const INCLUDED = [
   "The whole room, just your group",
-  "2× CDJ-3000 + DJM-A9 mixer",
-  "Full-range monitoring",
+  "4× CDJ-3000 + DJM-A9 mixer",
+  "QSC K12.2 + JBL EON618S monitoring",
   "No per-person charge",
 ];
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AdminNav } from "./AdminNav";
 import { SignOutButton } from "./SignOutButton";
+import { Wordmark } from "@/components/layout/Wordmark";
 
 export function AdminShell({
   email,
@@ -12,10 +13,10 @@ export function AdminShell({
   return (
     <div className="flex min-h-dvh flex-col md:flex-row">
       <aside className="flex flex-col gap-6 border-b border-border bg-bg p-5 md:sticky md:top-0 md:h-dvh md:w-64 md:shrink-0 md:border-b-0 md:border-r">
-        <Link href="/admin" className="flex items-center gap-2.5">
-          <span className="block h-2 w-2 bg-accent" aria-hidden />
-          <span className="font-mono text-sm uppercase tracking-meta text-text">
-            Unit 20 · Admin
+        <Link href="/admin" className="flex items-center gap-3">
+          <Wordmark className="w-[88px]" />
+          <span className="font-mono text-[11px] uppercase tracking-meta text-text-dim">
+            Admin
           </span>
         </Link>
 
