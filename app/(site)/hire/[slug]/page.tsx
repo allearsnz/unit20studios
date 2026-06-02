@@ -1,12 +1,50 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
+import { ArrowRight, Mail, Phone } from "lucide-react";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { Faq } from "@/components/ui/Faq";
+import { ProductGrid } from "@/components/hire/ProductGrid";
+import { ContactStrip } from "@/components/hire/ContactStrip";
 import { HIRE_SERVICES, getHireService } from "@/lib/hire";
+import {
+  CDJ_PAGE_DJ_ORDER,
+  productBySlug,
+  productsByCategory,
+  type Product,
+} from "@/lib/products";
+import {
+  HIRE_EMAIL,
+  HIRE_PHONE_DISPLAY,
+  HIRE_PHONE_TEL,
+  buildHireMailto,
+} from "@/lib/hire-contact";
 import { breadcrumbLd, faqPageLd, serviceLd } from "@/lib/seo";
+import { site } from "@/lib/site";
+
+const HIRE_FAQS = [
+  {
+    q: "How do I book?",
+    a: `Email ${HIRE_EMAIL} or call ${HIRE_PHONE_DISPLAY} with your dates and gear. We'll confirm availability and send a quote.`,
+  },
+  {
+    q: "Are these per-day rates?",
+    a: "Yes, +GST. Multi-day and weekly discounts available — just ask.",
+  },
+  {
+    q: "Do you deliver?",
+    a: "Within Christchurch, yes. Delivery and pickup fees depend on the package and are included with most full backline hires.",
+  },
+  {
+    q: "Can I add lighting, staging, or a sound tech?",
+    a: "Yes. We run full event production through All Ears. Mention what you need in your enquiry.",
+  },
+  {
+    q: "What's the deposit?",
+    a: "A bond may apply on higher-value hires. We'll let you know when we send the quote.",
+  },
+];
 
 export function generateStaticParams() {
   return HIRE_SERVICES.map((s) => ({ slug: s.slug }));
@@ -21,11 +59,36 @@ export async function generateMetadata({
   const service = getHireService(slug);
   if (!service) return {};
   return {
-    title: service.metaTitle,
-    description: service.metaDescription,
+    title: service.title,
+    description: service.description,
     alternates: { canonical: `/hire/${service.slug}` },
-    openGraph: { title: service.metaTitle, description: service.metaDescription, url: `/hire/${service.slug}` },
+    openGraph: {
+      title: service.title,
+      description: service.description,
+      url: `/hire/${service.slug}`,
+    },
   };
+}
+
+/**
+ * For cdj-hire-christchurch we want DJ players + mixers + all-in-one rendered
+ * in a specific cross-category order. Everywhere else just uses category order.
+ */
+function djSectionProducts(slug: string): Product[] {
+  if (slug === "cdj-hire-christchurch") {
+    return CDJ_PAGE_DJ_ORDER
+      .map((s) => productBySlug(s))
+      .filter((p): p is Product => Boolean(p));
+  }
+  return ["dj-player", "dj-mixer", "dj-all-in-one"]
+    .flatMap((c) => productsByCategory(c as Product["category"]));
+}
+
+function paSectionProducts(): Product[] {
+  return [
+    ...productsByCategory("speaker"),
+    ...productsByCategory("subwoofer"),
+  ];
 }
 
 export default async function HireServicePage({
@@ -37,113 +100,184 @@ export default async function HireServicePage({
   const service = getHireService(slug);
   if (!service) notFound();
 
-  const related = service.related
-    .map((r) => getHireService(r))
-    .filter((s): s is NonNullable<typeof s> => Boolean(s));
+  const wantsDjSection = service.categories.some((c) =>
+    ["dj-player", "dj-mixer", "dj-all-in-one"].includes(c),
+  );
+  const wantsPaSection = service.categories.some((c) =>
+    ["speaker", "subwoofer"].includes(c),
+  );
+  const wantsLighting = service.slug === "lighting-hire-christchurch";
+
+  const djProducts = wantsDjSection ? djSectionProducts(service.slug) : [];
+  const paProducts = wantsPaSection ? paSectionProducts() : [];
+
+  const heroMailto = buildHireMailto({ subject: `Hire enquiry: ${service.shortTitle}` });
 
   return (
     <>
       <JsonLd
         data={[
           serviceLd({
-            name: service.h1,
+            name: service.title,
             serviceType: "Equipment hire",
             path: `/hire/${service.slug}`,
-            description: service.metaDescription,
+            description: service.description,
           }),
-          faqPageLd(service.faqs),
+          faqPageLd(HIRE_FAQS),
           breadcrumbLd([
             { name: "Hire", path: "/hire" },
-            { name: service.nav, path: `/hire/${service.slug}` },
+            { name: service.shortTitle, path: `/hire/${service.slug}` },
           ]),
         ]}
       />
 
       {/* hero */}
-      <section className="relative overflow-hidden border-b border-border">
-        <div className="pointer-events-none absolute inset-0 opacity-60" style={{ background: service.gradient }} aria-hidden />
-        <div className="container-page relative pb-16 pt-32 md:pb-20 md:pt-40">
-          <Link href="/hire" className="link font-mono text-xs uppercase tracking-meta text-text-muted">
-            ← All hire
-          </Link>
-          <h1 className="display mt-5 max-w-3xl text-text">{service.h1}</h1>
-          <p className="lead mt-6 max-w-xl text-pretty">{service.intro}</p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href={`/contact?subject=Hire&gear=${encodeURIComponent(service.nav)}`} className="btn btn-primary">
-              Get a quote
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Link>
-            <Link href="/hire" className="btn btn-secondary">
-              More hire options
-            </Link>
-          </div>
+      <Section className="pt-32 md:pt-40">
+        <div className="flex flex-col gap-3 font-mono text-meta uppercase tracking-meta text-text-dim">
+          <nav aria-label="Breadcrumb">
+            <Link href="/" className="link hover:text-text-muted">Home</Link>
+            <span aria-hidden> / </span>
+            <Link href="/hire" className="link hover:text-text-muted">Hire</Link>
+            <span aria-hidden> / </span>
+            <span className="text-text-muted">{service.shortTitle}</span>
+          </nav>
         </div>
-      </section>
-
-      {/* gear */}
-      <Section>
-        <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
-          <SectionHeading eyebrow="The gear" title="What you get." lead={service.body} />
-          <ul className="-mt-2">
-            {service.gear.map((g, i) => (
-              <li
-                key={g.name}
-                className="grid grid-cols-[auto_1fr] gap-x-5 border-t border-border py-6 first:border-t-0 md:gap-x-8"
-              >
-                <span className="font-mono text-meta tracking-meta text-text-dim">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <h3 className="font-display text-h3 font-semibold text-text">{g.name}</h3>
-                  <p className="lead mt-2 max-w-md text-pretty">{g.spec}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
+        <div className="mt-6 max-w-3xl">
+          <p className="eyebrow">Hire</p>
+          <h1 className="display mt-4 text-text">{service.title}</h1>
+          <p className="lead mt-5 text-pretty">{service.lede}</p>
+          <p className="mono mt-4 text-meta uppercase tracking-meta text-accent">
+            {service.fromLabel}
+          </p>
+        </div>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <a href={heroMailto} className="btn btn-primary">
+            <Mail className="size-4" aria-hidden /> Email to book
+          </a>
+          <a
+            href={`tel:${HIRE_PHONE_TEL}`}
+            className="btn btn-secondary"
+            aria-label={`Call ${HIRE_PHONE_DISPLAY}`}
+          >
+            <Phone className="size-4" aria-hidden /> Call {HIRE_PHONE_DISPLAY}
+          </a>
         </div>
       </Section>
 
-      {/* pricing + quote */}
-      <Section className="border-t border-border">
-        <div className="flex flex-col items-start gap-6 rounded-sm border border-border bg-bg-elev p-8 md:flex-row md:items-center md:justify-between md:p-12">
-          <div className="flex items-start gap-4">
-            <Check className="mt-1 h-5 w-5 shrink-0 text-accent" aria-hidden />
-            <div>
-              <h2 className="h3 text-text">{service.priceNote}</h2>
-              <p className="lead mt-2 max-w-md">
-                Delivery, setup and collection across Christchurch. Refundable bond and ID on hire.
-              </p>
+      {/* DJ players + mixers + all-in-one */}
+      {djProducts.length > 0 ? (
+        <Section className="border-t border-border">
+          <SectionHeading
+            eyebrow="01 — DJ players & mixers"
+            title="Pioneer DJ gear"
+            lead="Run a club-spec setup with the same gear used at Boiler Room, R&V and most Christchurch venues."
+          />
+          <div className="mt-10">
+            <ProductGrid products={djProducts} priorityCount={3} />
+          </div>
+          <p className="mt-8 font-mono text-meta uppercase tracking-meta text-text-dim">
+            Standard day rates. Multi-day, multi-unit and full backline packages on enquiry.
+          </p>
+        </Section>
+      ) : null}
+
+      {/* PA section */}
+      {paProducts.length > 0 ? (
+        <Section className="border-t border-border">
+          <SectionHeading
+            eyebrow={wantsDjSection ? "02 — Add a speaker" : "01 — Speakers & subs"}
+            title={wantsDjSection ? "PA for your DJ setup" : "Active PA"}
+            lead={
+              wantsDjSection
+                ? "Active 12-inch tops and 18-inch subs that match the gear above. Add a stand or go Bluetooth."
+                : "Active 12-inch tops and an 18-inch sub. Add a stand or go Bluetooth."
+            }
+          />
+          <div className="mt-10">
+            <ProductGrid
+              products={paProducts}
+              priorityCount={wantsDjSection ? 0 : 3}
+            />
+          </div>
+        </Section>
+      ) : null}
+
+      {/* larger systems */}
+      {service.showLargerSystems ? (
+        <Section className="border-t border-border">
+          <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
+            <SectionHeading
+              eyebrow={
+                wantsDjSection && wantsPaSection ? "03 — Larger systems" : "02 — Larger systems"
+              }
+              title="Festival and full-club rigs"
+              lead="For full festival and club-spec sound we run RCF HDL 30 line arrays and TTL6 systems with backline support. Tell us your venue, headcount and any rider notes and we'll quote a tailored package."
+            />
+            <div className="flex items-end">
+              <a
+                href={buildHireMailto({ subject: "Quote: larger sound system" })}
+                className="btn btn-primary"
+              >
+                <Mail className="size-4" aria-hidden /> Email for a custom quote
+              </a>
             </div>
           </div>
-          <Link
-            href={`/contact?subject=Hire&gear=${encodeURIComponent(service.nav)}`}
-            className="btn btn-primary shrink-0"
-          >
-            Get a quote
-            <ArrowRight className="h-4 w-4" aria-hidden />
-          </Link>
-        </div>
-      </Section>
+        </Section>
+      ) : null}
 
-      {/* faqs */}
-      <Section className="border-t border-border">
-        <SectionHeading eyebrow="FAQ" title={`${service.nav} — the details.`} />
+      {/* lighting placeholder body */}
+      {wantsLighting ? (
+        <Section className="border-t border-border">
+          <SectionHeading
+            eyebrow="01 — Fixtures"
+            title="Inventory list coming soon"
+            lead="Detailed fixture list is being finalised. For now, please get in touch with your event details — venue, dates, rough headcount, and the look you're after — and we'll spec a package."
+          />
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a
+              href={buildHireMailto({ subject: "Lighting hire enquiry" })}
+              className="btn btn-primary"
+            >
+              <Mail className="size-4" aria-hidden /> Lighting enquiry
+            </a>
+            <a
+              href={`tel:${HIRE_PHONE_TEL}`}
+              className="btn btn-secondary"
+              aria-label={`Call ${HIRE_PHONE_DISPLAY}`}
+            >
+              <Phone className="size-4" aria-hidden /> {HIRE_PHONE_DISPLAY}
+            </a>
+          </div>
+        </Section>
+      ) : null}
+
+      <ContactStrip
+        eyebrow="Book"
+        heading="Ready to book?"
+        body="Email or call us with your dates. We'll confirm availability, delivery, and any extras."
+        subject={`Hire enquiry: ${service.shortTitle}`}
+      />
+
+      {/* FAQ */}
+      <Section>
+        <SectionHeading eyebrow="FAQ" title="Hire FAQs" />
         <div className="mt-10">
-          <Faq items={service.faqs} />
+          <Faq items={HIRE_FAQS} />
         </div>
       </Section>
 
-      {/* related */}
+      {/* cross-link */}
       <Section className="border-t border-border">
-        <SectionHeading eyebrow="Also available" title="Round out the rig." />
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
-          {related.map((r) => (
-            <Link key={r.slug} href={`/hire/${r.slug}`} className="card card-hover group flex items-center justify-between gap-4 p-6">
-              <span className="font-display text-h3 font-semibold text-text">{r.nav}</span>
-              <ArrowUpRight className="h-5 w-5 text-text-muted transition-transform duration-300 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" aria-hidden />
-            </Link>
-          ))}
-        </div>
+        <Link
+          href="/studio"
+          className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-accent"
+        >
+          Looking for the studio? Practice on this gear at Unit 20 Studio
+          <ArrowRight className="size-4" aria-hidden />
+        </Link>
+        <p className="mt-2 font-mono text-meta uppercase tracking-meta text-text-dim">
+          {site.name} · {site.address.locality}
+        </p>
       </Section>
     </>
   );

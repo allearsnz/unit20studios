@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { JsonLd } from "@/components/seo/JsonLd";
@@ -21,23 +22,23 @@ const SPECS = [
   { k: "Hours", v: "07:00 – 24:00, 7 days" },
 ];
 
-// NOTE: gradient blocks are photography placeholders — swap for next/image
-// Unsplash (or real shoot) at the photography step.
+// TODO: real photo — these are Unsplash holding shots until Will shoots the
+// actual room. Swap the `src` values for /public assets when the shoot lands.
 const SHOTS = [
   {
     label: "The booth",
-    gradient:
-      "radial-gradient(120% 100% at 30% 20%, rgba(61,220,151,0.16), transparent 60%), linear-gradient(160deg,#161616,#0c0c0c)",
+    src: "https://images.unsplash.com/photo-1574169208507-84376144848b?auto=format&fit=crop&w=1200&q=80",
+    alt: "Dimly lit DJ booth with CDJs and a mixer",
   },
   {
     label: "Monitoring",
-    gradient:
-      "radial-gradient(100% 100% at 80% 80%, rgba(245,241,234,0.08), transparent 55%), linear-gradient(160deg,#181818,#0d0d0d)",
+    src: "https://images.unsplash.com/photo-1571266028243-d220c6a82332?auto=format&fit=crop&w=1200&q=80",
+    alt: "Close-up of a Pioneer CDJ player",
   },
   {
     label: "The couch",
-    gradient:
-      "radial-gradient(110% 110% at 60% 30%, rgba(229,72,77,0.12), transparent 60%), linear-gradient(160deg,#15100f,#0b0b0b)",
+    src: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80",
+    alt: "Moody low-lit interior with warm tones",
   },
 ];
 
@@ -60,13 +61,22 @@ export default function TheRoomPage() {
         />
 
         <div className="mt-12 grid gap-4 sm:grid-cols-3">
-          {SHOTS.map((s) => (
+          {SHOTS.map((s, i) => (
             <figure
               key={s.label}
-              className="relative aspect-[4/5] overflow-hidden border border-border"
-              style={{ background: s.gradient }}
+              className="relative aspect-[4/5] overflow-hidden border border-border bg-bg-elev"
             >
-              <figcaption className="absolute bottom-4 left-4 font-mono text-meta uppercase tracking-meta text-text-muted">
+              {/* TODO: real photo — replace src with a /public asset */}
+              <Image
+                src={s.src}
+                alt={s.alt}
+                fill
+                priority={i === 0}
+                sizes="(min-width: 640px) 33vw, 100vw"
+                className="object-cover"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-bg/80 to-transparent" aria-hidden />
+              <figcaption className="absolute bottom-4 left-4 font-mono text-meta uppercase tracking-meta text-text">
                 {s.label}
               </figcaption>
             </figure>

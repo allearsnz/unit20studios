@@ -71,10 +71,6 @@ See **`.env.example`** for the full list. Summary:
 3. Point your domain at the deployment. Verify your sending domain in Resend.
 4. Create the admin user in Supabase (above).
 
-> **Note:** Next 16 renamed the `middleware` convention to `proxy`. The current
-> `middleware.ts` still works (with a deprecation warning); rename to `proxy.ts`
-> when convenient.
-
 ## Cron jobs
 
 Hourly + daily, defined in `vercel.json`, all guarded by `CRON_SECRET`:

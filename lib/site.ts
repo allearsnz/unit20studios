@@ -48,8 +48,9 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
   {
     title: "Hire",
     links: [
+      { label: "All hire", href: "/hire" },
       { label: "CDJ hire", href: "/hire/cdj-hire-christchurch" },
-      { label: "Mixer hire", href: "/hire/djm-hire-christchurch" },
+      { label: "DJM hire", href: "/hire/djm-hire-christchurch" },
       { label: "PA hire", href: "/hire/pa-hire-christchurch" },
       { label: "Sound hire", href: "/hire/sound-hire-christchurch" },
       { label: "Lighting hire", href: "/hire/lighting-hire-christchurch" },

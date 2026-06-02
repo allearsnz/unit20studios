@@ -4,8 +4,9 @@ import { createServerClient } from "@supabase/ssr";
 /**
  * Guards /admin/* : requires a valid Supabase session whose email matches
  * ADMIN_EMAIL. /admin/login is public. Also refreshes the auth cookie.
+ * (Next 16 renamed the convention from `middleware` to `proxy`.)
  */
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (pathname.startsWith("/admin/login")) return NextResponse.next();
 
