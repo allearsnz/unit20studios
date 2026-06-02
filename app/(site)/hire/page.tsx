@@ -112,16 +112,13 @@ export default function HirePage() {
           className="mt-12 flex flex-wrap gap-x-6 gap-y-2 border-t border-border pt-6 font-mono text-meta uppercase tracking-meta"
         >
           <a href="#dj-equipment" className="link text-text-muted hover:text-text">
-            01 — DJ equipment
+            DJ equipment
           </a>
           <a href="#sound-equipment" className="link text-text-muted hover:text-text">
-            02 — Sound equipment
+            Sound equipment
           </a>
           <a href="#lighting-equipment" className="link text-text-muted hover:text-text">
-            03 — Lighting
-          </a>
-          <a href="#full-production" className="link text-accent">
-            04 — Full production
+            Lighting
           </a>
         </nav>
       </Section>
@@ -129,7 +126,7 @@ export default function HirePage() {
       {/* 01 — DJ Equipment Hire */}
       <Section id="dj-equipment" className="border-t border-border">
         <SectionHeading
-          eyebrow="01 — DJ equipment hire"
+          eyebrow="DJ equipment hire"
           title="Pioneer DJ gear."
           lead="Industry-standard players and mixers. The same kit you'll meet in any Christchurch club booth."
         />
@@ -144,7 +141,7 @@ export default function HirePage() {
       {/* 02 — Sound Equipment Hire */}
       <Section id="sound-equipment" className="border-t border-border">
         <SectionHeading
-          eyebrow="02 — Sound equipment hire"
+          eyebrow="Sound equipment hire"
           title="PA, tops and subs."
           lead="Active QSC and LD Systems boxes for events of any size. From a single Bluetooth top to a full club rig."
         />
@@ -157,7 +154,7 @@ export default function HirePage() {
       <Section id="lighting-equipment" className="border-t border-border">
         <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
           <SectionHeading
-            eyebrow="03 — Lighting equipment hire"
+            eyebrow="Lighting equipment hire"
             title="Lighting."
           />
           <div>
@@ -189,8 +186,8 @@ export default function HirePage() {
         className="relative isolate overflow-hidden border-t border-border"
       >
         <Image
-          src="/rvgarden.webp"
-          alt="Live band performing under blue stage lights at an All Ears event"
+          src="/fullproduction.webp"
+          alt="Crowd watching a live performance under the lit-up All Ears marquee stage"
           fill
           sizes="100vw"
           className="object-cover object-center"
@@ -215,7 +212,7 @@ export default function HirePage() {
 
         <div className="container-page relative min-h-[78vh] py-24 md:min-h-[80vh] md:py-32">
           <div className="flex h-full flex-col justify-end">
-            <p className="eyebrow text-accent">04 — Full production</p>
+            <p className="eyebrow text-accent">Full production</p>
             <h2 className="display mt-6 max-w-3xl text-text">
               We can run the whole night.
             </h2>
