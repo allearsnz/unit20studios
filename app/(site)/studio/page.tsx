@@ -19,22 +19,22 @@ const GEAR = [
   {
     n: "01",
     name: "4× Pioneer CDJ-3000",
-    spec: "Four flagship multiplayers, all linked — 9-inch touchscreens, beat jump, key sync. A full wall of the exact decks you'll meet in any club booth.",
+    spec: "Four flagship players, all linked. The same decks you'll meet in any club booth.",
   },
   {
     n: "02",
     name: "Pioneer DJM-A9",
-    spec: "The club-standard four-channel mixer at the centre of it. Learn the board that actually runs the night, not a controller approximation.",
+    spec: "Industry-standard 4-channel club mixer. Learn the board that actually runs the night.",
   },
   {
     n: "03",
     name: "QSC K12.2 + JBL EON618S",
-    spec: "QSC K12.2 powered tops (12-inch, 2000W) over a JBL EON618S 18-inch sub. Full-range, club-loud, and honest enough to hear every transition land — or not.",
+    spec: "QSC K12.2 tops (2000W) and a JBL EON618S 18-inch sub. Loud, full-range, honest.",
   },
   {
     n: "04",
     name: "The room",
-    spec: "Low light, treated walls, a couch and decent air. Set up like a real booth so practice feels like the gig.",
+    spec: "Low light, treated walls, a couch and good air. Custom lighting and temperature control. 5m x 6m, 30 sqm.",
   },
 ];
 
@@ -71,16 +71,16 @@ export default function StudioPage() {
       <section className="relative overflow-hidden border-b border-border">
         <div className="container-page grid items-center gap-10 pb-16 pt-32 md:min-h-[88vh] md:grid-cols-[1.05fr_0.95fr] md:gap-6 md:pb-24 md:pt-36">
           <div className="max-w-xl">
-            <p className="eyebrow">Studio / Hire · Christchurch</p>
+            <p className="eyebrow">DJ studio hire · Christchurch</p>
             <h1 className="display mt-5">
               Real club gear,
               <br />
               by the hour.
             </h1>
             <p className="lead mt-6 max-w-md">
-              A proper DJ booth — four CDJ-3000s, a club mixer, monitoring that
-              doesn&apos;t flatter you. Practice a set, record a mix, or teach a
-              mate. Come alone or bring the crew.
+              Whether you&apos;re prepping a gig, recording a mix or learning
+              the gear, our DJ booth is ready when you are. Four CDJ-3000s, a
+              club mixer and proper monitoring. Show up and play.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/studio/book" className="btn btn-primary">
@@ -125,8 +125,8 @@ export default function StudioPage() {
         <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
           <SectionHeading
             eyebrow="Pricing"
-            title="Off-peak or peak. That's the whole story."
-            lead="Off-peak is weekdays before 4pm. Peak is evenings and weekends. The price you see covers the whole room."
+            title="Pay as you go, no contracts."
+            lead="Book by the hour and pay when you arrive. Off-peak is weekdays before 4pm. Peak is evenings and weekends. One price for the whole room."
           />
           <Link
             href="/studio/pricing"
@@ -164,8 +164,8 @@ export default function StudioPage() {
         <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
           <SectionHeading
             eyebrow="The kit"
-            title="The same gear, every session."
-            lead="No surprises and nothing to relearn. What's in the room is what's in the club."
+            title="Professional equipment."
+            lead="Industry-standard Pioneer DJ throughout. Same setup every session, so there's nothing to relearn between bookings."
           />
           <ul className="-mt-2">
             {GEAR.map((g) => (
@@ -204,9 +204,8 @@ export default function StudioPage() {
               <p className="eyebrow">Hire</p>
               <h2 className="h2 mt-4 text-text">Need the gear at your place?</h2>
               <p className="lead mt-4 max-w-lg">
-                The same CDJs, mixers, PA and lighting go out across Christchurch
-                — collected or delivered. Tell us the event and we&apos;ll put
-                together a quote.
+                We hire the same Pioneer DJ gear, PA and lighting across
+                Christchurch. Tell us the event and we&apos;ll sort it.
               </p>
             </div>
             <div className="flex flex-col gap-3 md:items-end">
