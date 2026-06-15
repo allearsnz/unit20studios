@@ -29,7 +29,6 @@ export async function sendBookingCreatedEmails(opts: {
     tierLabel: tier.label,
     groupSize: booking.group_size,
     total,
-    isPeak: booking.is_peak,
     manageUrl,
   };
 

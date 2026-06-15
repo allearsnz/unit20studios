@@ -14,8 +14,7 @@ export default function BookingReceivedNewCustomer({
   durationHours = 2,
   tierLabel = "Up to 5 people",
   groupSize = 3,
-  total = "$90.00",
-  isPeak = true,
+  total = "$75.00+GST",
   manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
 }: BookingEmailProps) {
   return (
@@ -32,7 +31,7 @@ export default function BookingReceivedNewCustomer({
         rows={[
           { label: "Reference", value: friendlyId },
           { label: "Requested", value: whenLabel },
-          { label: "Duration", value: `${durationHours}h · ${isPeak ? "Peak" : "Off-peak"}` },
+          { label: "Duration", value: `${durationHours}h` },
           { label: "Room", value: `${tierLabel} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
           { label: "Total", value: `${total} (pay in person)`, accent: true },
           { label: "Status", value: "Pending — needs ID" },

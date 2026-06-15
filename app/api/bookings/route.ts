@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { bookingInputSchema, normalizeNZPhone } from "@/lib/validation";
-import { bookingIsPeak } from "@/lib/timezone";
 import { calcPriceCents } from "@/lib/pricing";
 import { sendBookingCreatedEmails } from "@/lib/notifications";
 import type { Booking, Customer, PricingTier } from "@/lib/types";
@@ -47,13 +46,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown pricing tier." }, { status: 422 });
   }
   const tier = tierRow as PricingTier;
-  const minPeople = input.tierSlug === "large" ? 6 : 1;
-  if (input.groupSize < minPeople || input.groupSize > tier.max_people) {
-    return NextResponse.json({ error: "Group size doesn't match the selected room." }, { status: 422 });
+  if (input.groupSize < 1 || input.groupSize > tier.max_people) {
+    return NextResponse.json(
+      { error: `Group size must be between 1 and ${tier.max_people}. For larger groups, please get in touch.` },
+      { status: 422 },
+    );
   }
 
-  const isPeak = bookingIsPeak(start, end);
-  const total = calcPriceCents(tier, input.durationHours, isPeak);
+  const total = calcPriceCents(tier, input.durationHours);
 
   // find-or-create customer
   const email = input.email.toLowerCase();
@@ -108,7 +108,7 @@ export async function POST(req: NextRequest) {
     p_pricing_tier_id: tier.id,
     p_group_size: input.groupSize,
     p_total_price_cents: total,
-    p_is_peak: isPeak,
+    p_is_peak: false,
     p_status: status,
     p_source: input.source ?? null,
     p_customer_note: input.customerNote ?? null,

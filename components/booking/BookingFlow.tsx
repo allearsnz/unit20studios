@@ -7,12 +7,12 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { Calendar } from "./Calendar";
 import { SlotPicker } from "./SlotPicker";
-import { TierSelector, tierRange } from "./TierSelector";
+import { GroupSize } from "./GroupSize";
 import { DetailsForm } from "./DetailsForm";
 import { TermsAccordion } from "./TermsAccordion";
 import { BookingSummary } from "./BookingSummary";
 import { MAX_HOURS, detailsSchema, type DetailsValues, type Selection, type Slot } from "./types";
-import { PRICING_TIERS, calcPriceCents, formatNZD } from "@/lib/pricing";
+import { BULK_PACK, FLAT_LIMITS, FLAT_TIER, calcPriceCents, formatNZD, formatNZDPlusGst } from "@/lib/pricing";
 import { formatNZ } from "@/lib/timezone";
 import { getStoredSource } from "@/lib/attribution";
 import { cn } from "@/lib/utils";
@@ -55,7 +55,6 @@ export function BookingFlow() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [sel, setSel] = useState<Selection | null>(null);
-  const [tierSlug, setTierSlug] = useState<"small" | "large">("small");
   const [groupSize, setGroupSize] = useState(1);
   const [agree, setAgree] = useState(false);
   const [marketing, setMarketing] = useState(false);
@@ -86,19 +85,13 @@ export function BookingFlow() {
     };
   }, [date, refreshKey]);
 
-  const tier = PRICING_TIERS.find((t) => t.slug === tierSlug)!;
+  const tier = FLAT_TIER;
   const duration = sel?.count ?? 0;
-  const selectedSlots = sel ? slots.slice(sel.startIdx, sel.startIdx + sel.count) : [];
-  const isPeak = selectedSlots.some((s) => s.is_peak);
   const startSlot = sel ? slots[sel.startIdx] : null;
   const endSlot = sel ? slots[sel.startIdx + sel.count - 1] : null;
 
-  const priceByTier = {
-    small: (calcPriceCents(PRICING_TIERS[0], duration || 1, isPeak) / 100).toFixed(2),
-    large: (calcPriceCents(PRICING_TIERS[1], duration || 1, isPeak) / 100).toFixed(2),
-  } as const;
-  const totalCents = calcPriceCents(tier, duration || 0, isPeak);
-  const totalLabel = duration ? formatNZD(totalCents) : null;
+  const totalCents = calcPriceCents(tier, duration || 0);
+  const totalLabel = duration ? formatNZDPlusGst(totalCents) : null;
 
   const dateLabel = date ? civilLabel(date) : null;
   const timeLabel =
@@ -128,12 +121,6 @@ export function BookingFlow() {
       if (i === end + 1 && count < MAX_HOURS) return { startIdx, count: count + 1 };
       return { startIdx: i, count: 1 };
     });
-
-  const changeTier = (slug: "small" | "large") => {
-    setTierSlug(slug);
-    const { min: mn, max: mx } = tierRange(slug);
-    setGroupSize((g) => Math.min(mx, Math.max(mn, g)));
-  };
 
   const scrollTop = () =>
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -180,7 +167,7 @@ export function BookingFlow() {
         body: JSON.stringify({
           startTime: startSlot.start,
           durationHours: duration,
-          tierSlug,
+          tierSlug: tier.slug,
           groupSize,
           name: v.name,
           email: v.email,
@@ -256,21 +243,46 @@ export function BookingFlow() {
         {step === 1 && (
           <StepShell
             title="Pick your time"
-            hint="Tap an hour, then tap the next one to extend. 15-min buffer included."
+            hint={`Tap an hour, or tap the next one to make it ${MAX_HOURS}. ${MAX_HOURS}-hour max online; need longer? Email studio@unit20.nz.`}
           >
             <SlotPicker slots={slots} loading={loadingSlots} isSelected={isSelected} onToggle={toggle} />
           </StepShell>
         )}
 
         {step === 2 && (
-          <StepShell title="Your group" hint="The price covers the whole room.">
-            <TierSelector
-              tierSlug={tierSlug}
-              groupSize={groupSize}
-              priceByTier={priceByTier}
-              onTier={changeTier}
-              onGroupSize={setGroupSize}
-            />
+          <StepShell title="Your group" hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. ${formatNZD(BULK_PACK.totalCents)}+GST for the 10-hour bulk pack — handy if you're practising weekly.`}>
+            <div className="card p-7">
+              <div className="flex items-baseline justify-between">
+                <h3 className="font-display text-h3 font-semibold text-text">
+                  {tier.label}
+                </h3>
+                <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
+                  Flat rate
+                </span>
+              </div>
+              <p className="mono mt-5 text-2xl text-text">
+                {totalLabel ?? formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents)}
+                <span className="ml-2 font-sans text-meta text-text-muted">
+                  {duration ? `${duration}h total` : "1h from"}
+                </span>
+              </p>
+              <GroupSize
+                value={groupSize}
+                min={1}
+                max={FLAT_LIMITS.maxGroupSize}
+                onChange={setGroupSize}
+              />
+              <p className="mt-5 font-mono text-meta uppercase tracking-meta text-text-muted">
+                More than {FLAT_LIMITS.maxGroupSize} people? An additional fee may apply —{" "}
+                <a
+                  href="/contact?subject=Studio"
+                  className="link text-accent"
+                >
+                  get in touch
+                </a>
+                .
+              </p>
+            </div>
           </StepShell>
         )}
 
@@ -298,8 +310,8 @@ export function BookingFlow() {
               rows={[
                 { label: "Date", value: dateLabel ?? "—" },
                 { label: "Time", value: timeLabel ?? "—" },
-                { label: "Duration", value: `${duration}h · ${isPeak ? "Peak" : "Off-peak"}` },
-                { label: "Room", value: `${tier.label} · ${groupSize} people` },
+                { label: "Duration", value: `${duration}h` },
+                { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
                 { label: "Name", value: getValues("name") || "—" },
                 { label: "Email", value: getValues("email") || "—" },
                 { label: "Total", value: totalLabel ?? "—", accent: true },
@@ -355,7 +367,6 @@ export function BookingFlow() {
           durationHours={duration}
           tierLabel={duration ? tier.label : null}
           groupSize={groupSize}
-          isPeak={isPeak}
           totalLabel={totalLabel}
         />
       </aside>

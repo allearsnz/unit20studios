@@ -22,13 +22,14 @@ const SPECS = [
   { k: "Hours", v: "07:00 – 24:00, 7 days" },
 ];
 
-// TODO: real photo — these are Unsplash holding shots until Will shoots the
-// actual room. Swap the `src` values for /public assets when the shoot lands.
+// "The booth" is the real Unit 20 photo (public/theroom.webp). "Monitoring"
+// and "The couch" are still Unsplash holding shots — swap those when the rest
+// of the shoot lands.
 const SHOTS = [
   {
     label: "The booth",
-    src: "https://images.unsplash.com/photo-1574169208507-84376144848b?auto=format&fit=crop&w=1200&q=80",
-    alt: "Dimly lit DJ booth with CDJs and a mixer",
+    src: "/theroom.webp",
+    alt: "Unit 20 booth: four Pioneer CDJ-3000s linked to a DJM-A9 mixer on a black desk",
   },
   {
     label: "Monitoring",

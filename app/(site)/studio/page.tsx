@@ -4,7 +4,7 @@ import { ArrowRight, Clock, MapPin, Users } from "lucide-react";
 import { ParallaxPhoto } from "@/components/studio/ParallaxPhoto";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
-import { PRICING_TIERS, calcPriceCents } from "@/lib/pricing";
+import { BULK_PACK, FLAT_TIER, formatNZDPlusGst } from "@/lib/pricing";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -38,9 +38,6 @@ const GEAR = [
   },
 ];
 
-const small = PRICING_TIERS[0];
-const large = PRICING_TIERS[1];
-
 const serviceLd = {
   "@context": "https://schema.org",
   "@type": "Service",
@@ -53,13 +50,22 @@ const serviceLd = {
     name: site.name,
     url: site.url,
   },
-  offers: PRICING_TIERS.map((t) => ({
-    "@type": "Offer",
-    name: `${t.label} — off-peak hour`,
-    price: (calcPriceCents(t, 1, false) / 100).toFixed(2),
-    priceCurrency: "NZD",
-    url: `${site.url}/studio/book`,
-  })),
+  offers: [
+    {
+      "@type": "Offer",
+      name: "1 hour studio session",
+      price: (FLAT_TIER.peak_1h_price_cents / 100).toFixed(2),
+      priceCurrency: "NZD",
+      url: `${site.url}/studio/book`,
+    },
+    {
+      "@type": "Offer",
+      name: "2 hour studio session",
+      price: (FLAT_TIER.peak_2h_price_cents / 100).toFixed(2),
+      priceCurrency: "NZD",
+      url: `${site.url}/studio/book`,
+    },
+  ],
 };
 
 export default function StudioPage() {
@@ -101,12 +107,12 @@ export default function StudioPage() {
               <div className="flex flex-col gap-1">
                 <Users className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Capacity</dt>
-                <dd>Up to 10</dd>
+                <dd>Up to 4</dd>
               </div>
               <div className="flex flex-col gap-1">
                 <MapPin className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Price from</dt>
-                <dd>From $35/hr</dd>
+                <dd>$50+GST/hr</dd>
               </div>
             </dl>
           </div>
@@ -126,7 +132,7 @@ export default function StudioPage() {
           <SectionHeading
             eyebrow="Pricing"
             title="Pay as you go, no contracts."
-            lead="Book by the hour and pay when you arrive. Off-peak is weekdays before 4pm. Peak is evenings and weekends. One price for the whole room."
+            lead="Book by the hour and pay when you arrive. One price for the whole room. Practising weekly? Grab the bulk pack and save."
           />
           <Link
             href="/studio/pricing"
@@ -138,24 +144,55 @@ export default function StudioPage() {
         </div>
 
         <div className="mt-10 grid gap-4 md:grid-cols-2">
-          {[small, large].map((t) => (
-            <div key={t.slug} className="card card-hover p-7 md:p-9">
+          {/* Flat rate */}
+          <div className="card p-7 md:p-9">
+            <div className="flex items-baseline justify-between">
+              <h3 className="font-display text-h3 font-semibold text-text">
+                Pay as you go
+              </h3>
+              <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
+                Up to 4 people
+              </span>
+            </div>
+            <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border">
+              <PriceCell label="1 hour" value={formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents)} />
+              <PriceCell label="2 hours" value={formatNZDPlusGst(FLAT_TIER.peak_2h_price_cents)} accent />
+            </div>
+            <p className="mt-5 font-mono text-meta uppercase tracking-meta text-text-muted">
+              For bookings larger than 4 people, an additional fee may apply.
+            </p>
+          </div>
+
+          {/* Bulk pack */}
+          <div className="card relative overflow-hidden p-7 md:p-9">
+            <div
+              className="pointer-events-none absolute inset-0"
+              aria-hidden
+              style={{
+                background:
+                  "radial-gradient(80% 100% at 90% 0%, rgba(61,220,151,0.08), transparent 60%)",
+              }}
+            />
+            <div className="relative">
               <div className="flex items-baseline justify-between">
                 <h3 className="font-display text-h3 font-semibold text-text">
-                  {t.label}
+                  10-hour bulk pack
                 </h3>
-                <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
-                  {t.slug === "small" ? "Solo / small crew" : "Full booth"}
+                <span className="font-mono text-meta uppercase tracking-meta text-accent">
+                  Best value
                 </span>
               </div>
-              <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border">
-                <PriceCell label="Off-peak / 2h" cents={calcPriceCents(t, 2, false)} accent />
-                <PriceCell label="Peak / 2h" cents={calcPriceCents(t, 2, true)} />
-                <PriceCell label="Off-peak / hr" cents={calcPriceCents(t, 1, false)} />
-                <PriceCell label="Peak / hr" cents={calcPriceCents(t, 1, true)} />
-              </div>
+              <p className="mono mt-6 text-h2 text-text">
+                {formatNZDPlusGst(BULK_PACK.hourlyCents)}
+                <span className="ml-2 font-sans text-meta uppercase tracking-meta text-text-muted">
+                  / hour
+                </span>
+              </p>
+              <p className="lead mt-3 text-sm text-pretty">
+                Prepay 10 hours and use them whenever — half the standard rate.
+              </p>
             </div>
-          ))}
+          </div>
         </div>
       </Section>
 
@@ -238,11 +275,11 @@ export default function StudioPage() {
 
 function PriceCell({
   label,
-  cents,
+  value,
   accent,
 }: {
   label: string;
-  cents: number;
+  value: string;
   accent?: boolean;
 }) {
   return (
@@ -250,11 +287,8 @@ function PriceCell({
       <p className="font-mono text-meta uppercase tracking-meta text-text-muted">
         {label}
       </p>
-      <p className="mono mt-2 text-2xl text-text">
-        <span className="text-base text-text-muted">$</span>
-        <span className={accent ? "text-accent" : ""}>
-          {(cents / 100).toFixed(2)}
-        </span>
+      <p className={`mono mt-2 text-xl ${accent ? "text-accent" : "text-text"}`}>
+        {value}
       </p>
     </div>
   );

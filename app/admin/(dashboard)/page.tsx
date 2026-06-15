@@ -120,7 +120,7 @@ export default async function AdminDashboard({
                     </span>
                   </td>
                   <td className="py-3 pr-4 text-text-muted">
-                    {b.pricing_tier?.slug === "large" ? "6–10" : "≤5"} · {b.group_size}
+                    {b.pricing_tier?.label ?? "—"} · {b.group_size}
                   </td>
                   <td className="py-3 pr-4 text-right mono text-text">{formatNZD(b.total_price_cents)}</td>
                   <td className="py-3 pr-4">

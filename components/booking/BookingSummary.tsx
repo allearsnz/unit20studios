@@ -10,7 +10,6 @@ export function BookingSummary({
   durationHours,
   tierLabel,
   groupSize,
-  isPeak,
   totalLabel,
   className,
 }: {
@@ -19,7 +18,6 @@ export function BookingSummary({
   durationHours: number;
   tierLabel: string | null;
   groupSize: number;
-  isPeak: boolean;
   totalLabel: string | null;
   className?: string;
 }) {
@@ -28,7 +26,7 @@ export function BookingSummary({
     { label: "Time", value: timeLabel },
     {
       label: "Duration",
-      value: durationHours ? `${durationHours}h · ${isPeak ? "Peak" : "Off-peak"}` : null,
+      value: durationHours ? `${durationHours}h` : null,
     },
     { label: "Room", value: tierLabel },
     { label: "People", value: groupSize ? String(groupSize) : null },

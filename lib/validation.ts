@@ -39,9 +39,9 @@ const isoDate = z
 /** Customer-facing booking submission payload. */
 export const bookingInputSchema = z.object({
   startTime: z.string().datetime({ offset: true }),
-  durationHours: z.number().int().min(1).max(12),
-  tierSlug: z.enum(["small", "large"]),
-  groupSize: z.number().int().min(1).max(10),
+  durationHours: z.number().int().min(1).max(2),
+  tierSlug: z.enum(["small"]),
+  groupSize: z.number().int().min(1).max(4),
   name: z.string().trim().min(2, "Tell us your name").max(120),
   email: z.string().trim().toLowerCase().email("Check your email address").max(180),
   phone: z

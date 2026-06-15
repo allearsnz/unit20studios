@@ -12,7 +12,7 @@ export type PaymentMethod = "in_person" | "stripe";
 
 export interface PricingTier {
   id: string;
-  slug: "small" | "large";
+  slug: "small";
   label: string;
   max_people: number;
   peak_1h_price_cents: number;

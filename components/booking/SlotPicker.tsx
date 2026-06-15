@@ -68,7 +68,7 @@ export function SlotPicker({
                 selected ? "text-bg/70" : "text-text-dim",
               )}
             >
-              {!slot.available ? "—" : slot.is_peak ? "Peak" : "Off-peak"}
+              {!slot.available ? "—" : "Available"}
             </span>
           </button>
         );

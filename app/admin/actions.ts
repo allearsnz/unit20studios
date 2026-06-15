@@ -7,7 +7,7 @@ import { assertAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, icsAttachment } from "@/lib/email";
 import { buildBookingIcs } from "@/lib/ics";
-import { bookingIsPeak, formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
+import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
 import { calcPriceCents } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
 import { site } from "@/lib/site";
@@ -36,10 +36,7 @@ function emailProps(b: FullBooking) {
     durationHours: b.duration_hours,
     tierLabel: b.pricing_tier.label,
     groupSize: b.group_size,
-    total: new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(
-      b.total_price_cents / 100,
-    ),
-    isPeak: b.is_peak,
+    total: `${new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(b.total_price_cents / 100)}+GST`,
     manageUrl: `${site.url}/studio/book/confirmation?id=${b.friendly_id}`,
   };
 }
@@ -176,8 +173,7 @@ export async function quickBook(formData: FormData) {
   const { data: tierRow } = await supabase.from("pricing_tiers").select("*").eq("slug", tierSlug).maybeSingle();
   if (!tierRow) return;
   const tier = tierRow as PricingTier;
-  const isPeak = bookingIsPeak(start, end);
-  const total = calcPriceCents(tier, durationHours, isPeak);
+  const total = calcPriceCents(tier, durationHours);
 
   const email = rawEmail || `walkin-${Date.now()}@unit20.local`;
   const phone = rawPhone ? (normalizeNZPhone(rawPhone) ?? rawPhone) : "—";
@@ -203,7 +199,7 @@ export async function quickBook(formData: FormData) {
     p_pricing_tier_id: tier.id,
     p_group_size: groupSize,
     p_total_price_cents: total,
-    p_is_peak: isPeak,
+    p_is_peak: false,
     p_status: "confirmed",
     p_source: "walk-in",
     p_customer_note: null,
@@ -226,8 +222,7 @@ export async function quickBook(formData: FormData) {
         durationHours,
         tierLabel: tier.label,
         groupSize,
-        total: new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(total / 100),
-        isPeak,
+        total: `${new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(total / 100)}+GST`,
         manageUrl: `${site.url}/studio/book/confirmation?id=${booking.friendly_id}`,
       }),
     });

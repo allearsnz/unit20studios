@@ -76,10 +76,7 @@ export default async function ConfirmationPage({
           <dl className="mt-10 border-t border-border">
             <Row label="Reference" value={booking.friendly_id} mono />
             <Row label="When" value={formatBookingWhen(booking.start_time, booking.end_time)} />
-            <Row
-              label="Duration"
-              value={`${booking.duration_hours}h · ${booking.is_peak ? "Peak" : "Off-peak"}`}
-            />
+            <Row label="Duration" value={`${booking.duration_hours}h`} />
             {tierLabel ? (
               <Row label="Room" value={`${tierLabel} · ${booking.group_size} people`} />
             ) : null}
