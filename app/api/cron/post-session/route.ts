@@ -17,8 +17,11 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = createAdminClient();
     const now = Date.now();
-    const from = new Date(now - 3 * 3600 * 1000).toISOString();
-    const to = new Date(now - 2 * 3600 * 1000).toISOString();
+    // Runs once daily (Vercel Hobby cron limit). Catch every session that ended
+    // in the last 24h; post_session_sent_at makes it send-once. (Also correct
+    // if later moved back to hourly.)
+    const from = new Date(now - 24 * 3600 * 1000).toISOString();
+    const to = new Date(now).toISOString();
 
     const { data } = await supabase
       .from("bookings")

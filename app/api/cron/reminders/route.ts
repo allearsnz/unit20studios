@@ -20,8 +20,11 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = createAdminClient();
     const now = Date.now();
-    const from = new Date(now + 24 * 3600 * 1000).toISOString();
-    const to = new Date(now + 25 * 3600 * 1000).toISOString();
+    // Runs once daily (Vercel Hobby cron limit). Widen to the whole next-24h
+    // window so every upcoming booking is caught; reminder_sent_at makes it
+    // send-once. (Also correct if later moved back to hourly.)
+    const from = new Date(now).toISOString();
+    const to = new Date(now + 24 * 3600 * 1000).toISOString();
 
     const { data } = await supabase
       .from("bookings")
