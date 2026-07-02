@@ -4,7 +4,7 @@
 export const STUDIO_TERMS: { title: string; body: string }[] = [
   {
     title: "Booking & payment",
-    body: "Sessions are booked online and confirmed by email. Payment is taken in person at the start of your session (card or cash) unless we've arranged otherwise. The price shown covers the whole room for your group size — no per-person charge.",
+    body: "Sessions are booked online and confirmed by email. Payment is taken in person at the start of your session (card or cash) unless we've arranged otherwise. The price shown covers the whole room — groups of five or more add a small flat surcharge ($20+GST on a 1-hour session, $30+GST on 2 hours), shown before you confirm.",
   },
   {
     title: "First booking & ID",
@@ -48,10 +48,10 @@ export const BEFORE_YOU_COME: { title: string; body: string }[] = [
   },
   {
     title: "Who can come",
-    body: "The room takes up to 4 people, and everyone in the room counts. Need more? Get in touch — an additional fee may apply. It's a practice space, not a party venue, so keep numbers to what you booked.",
+    body: "The room takes up to 8 people, and everyone in the room counts. Groups of 5 or more add a flat surcharge — $20+GST on a 1-hour session, $30+GST on 2 hours — added automatically when you book. It's a practice space, not a party venue, so keep numbers to what you booked.",
   },
   {
     title: "Sound & hours",
-    body: "We run 7am til midnight. It's a proper booth so you can push the monitors, but we're good neighbours — late sessions keep it sensible. Weekday daytime (Mon–Fri, 10am–4pm) is the quietest time to really dig in — and 2 hours then is just $60+GST.",
+    body: "We run 10am til midnight. It's a proper booth so you can push the monitors, but we're good neighbours — late sessions keep it sensible. Weekday daytime (Mon–Fri, 10am–4pm) is the quietest time to really dig in — and 2 hours then is just $60+GST.",
   },
 ];

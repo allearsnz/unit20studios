@@ -17,9 +17,9 @@ const SPECS = [
   { k: "Players", v: "4× Pioneer CDJ-3000" },
   { k: "Mixer", v: "Pioneer DJM-A9" },
   { k: "Monitoring", v: "QSC K12.2 + JBL EON618S sub" },
-  { k: "Capacity", v: "Up to 4 people" },
+  { k: "Capacity", v: "Up to 8 people" },
   { k: "Connectivity", v: "USB · rec out · aux in" },
-  { k: "Hours", v: "07:00 – 24:00, 7 days" },
+  { k: "Hours", v: "10:00 – 24:00, 7 days" },
 ];
 
 const SHOTS = [

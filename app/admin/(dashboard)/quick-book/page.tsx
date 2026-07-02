@@ -34,7 +34,7 @@ export default function QuickBookPage() {
 
         <div>
           <label htmlFor="groupSize" className="font-mono text-meta uppercase tracking-meta text-text-muted">
-            People (standard rate covers up to 4)
+            People (5+ auto-adds the group surcharge)
           </label>
           <input id="groupSize" name="groupSize" type="number" min={1} max={10} defaultValue={1} className="input mt-2" />
         </div>

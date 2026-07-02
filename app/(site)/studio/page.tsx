@@ -11,7 +11,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "The Studio — practice on real club gear",
   description:
-    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 7am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm) two-hour sessions just $60+GST.",
+    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 10am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm) two-hour sessions just $60+GST.",
   alternates: { canonical: "/studio" },
   openGraph: { title: "Unit 20 — The Studio", url: "/studio" },
 };
@@ -110,12 +110,12 @@ export default function StudioPage() {
               <div className="flex flex-col gap-1">
                 <Clock className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Hours</dt>
-                <dd>07:00 – 24:00</dd>
+                <dd>10:00 – 24:00</dd>
               </div>
               <div className="flex flex-col gap-1">
                 <Users className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Capacity</dt>
-                <dd>Up to 4</dd>
+                <dd>Up to 8</dd>
               </div>
               <div className="flex flex-col gap-1">
                 <Banknote className="h-4 w-4 text-accent" aria-hidden />
@@ -164,7 +164,7 @@ export default function StudioPage() {
                 Pay as you go
               </h3>
               <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
-                Up to 4 people
+                Up to 8 people
               </span>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border">
@@ -178,7 +178,8 @@ export default function StudioPage() {
               />
             </div>
             <p className="mt-5 font-mono text-meta uppercase tracking-meta text-text-muted">
-              For bookings larger than 4 people, an additional fee may apply.
+              Groups of 5–8 add $20+GST (1h) / $30+GST (2h) — added
+              automatically when you book.
             </p>
           </div>
 
@@ -209,6 +210,8 @@ export default function StudioPage() {
               </p>
               <p className="lead mt-3 text-sm text-pretty">
                 Prepay 10 hours and use them whenever — half the standard rate.
+                Book online: you pick your first 2-hour session and we sort the
+                rest with you.
               </p>
             </div>
           </div>

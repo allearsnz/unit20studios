@@ -29,7 +29,7 @@ const FAQS = [
   },
   {
     q: "Is there a deposit?",
-    a: "No deposit for standard 1 or 2-hour sessions — pay in person at the start by card or cash. Bulk packs are prepaid by invoice.",
+    a: "No deposit for standard 1 or 2-hour sessions — pay in person at the start by card or cash. The 10-hour pack is prepaid — book your first session online and we'll sort payment with you.",
   },
   {
     q: "What if I want more than 2 hours?",
@@ -37,7 +37,7 @@ const FAQS = [
   },
   {
     q: "What about groups bigger than 4?",
-    a: "Standard pricing covers up to 4 people. For 5+ an additional fee may apply — message us with the headcount and we'll confirm.",
+    a: "The room takes up to 8. Groups of 5–8 add a flat surcharge — $20+GST on a 1-hour session, $30+GST on a 2-hour session — added automatically when you book.",
   },
   {
     q: "How does the cancellation policy work?",
@@ -89,7 +89,7 @@ export default function PricingPage() {
               {
                 name: "10-hour bulk pack",
                 price: (BULK_PACK.totalCents / 100).toFixed(2),
-                url: "/contact?subject=Studio",
+                url: "/studio/book",
               },
             ],
           }),
@@ -117,7 +117,7 @@ export default function PricingPage() {
                 Pay as you go
               </h2>
               <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
-                Up to 4 people
+                Up to 8 people
               </span>
             </div>
 
@@ -139,8 +139,8 @@ export default function PricingPage() {
 
             <p className="mt-6 border-t border-border pt-4 font-mono text-meta uppercase tracking-meta text-text-muted">
               Weekday daytime = Mon–Fri, sessions inside 10am–4pm. All prices
-              +GST. For bookings larger than 4 people, an additional fee may
-              apply.
+              +GST. Groups of 5–8 add $20+GST (1h) / $30+GST (2h), added
+              automatically when you book.
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -189,16 +189,27 @@ export default function PricingPage() {
               <p className="lead mt-3 text-pretty">
                 Prepay 10 hours (${(BULK_PACK.totalCents / 100).toFixed(0)}+GST
                 total) and use them whenever — half the standard rate. Perfect
-                if you&apos;re practising weekly.
+                if you&apos;re practising weekly. Book online: pick your first
+                2-hour session and we&apos;ll sort the rest of your hours with
+                you.
               </p>
 
-              <a
-                href={BULK_CONTACT_MAILTO}
-                className="btn btn-primary mt-8 inline-flex items-center gap-2"
-              >
-                <Mail className="h-4 w-4" aria-hidden />
-                Enquire about the bulk pack
-              </a>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link
+                  href="/studio/book"
+                  className="btn btn-primary inline-flex items-center gap-2"
+                >
+                  Book the 10-hour pack
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </Link>
+                <a
+                  href={BULK_CONTACT_MAILTO}
+                  className="btn btn-secondary inline-flex items-center gap-2"
+                >
+                  <Mail className="h-4 w-4" aria-hidden />
+                  Questions? Email us
+                </a>
+              </div>
             </div>
           </div>
         </div>
