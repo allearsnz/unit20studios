@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isPeakInstant, nzDateHourToUtc } from "@/lib/timezone";
+import { nzDateHourToUtc } from "@/lib/timezone";
+import { isWeekdayDaytime } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -77,7 +78,9 @@ export async function GET(req: NextRequest) {
       start: start.toISOString(),
       end: new Date(endMs).toISOString(),
       available,
-      is_peak: isPeakInstant(start),
+      // A 2-hour session starting here qualifies for the weekday-daytime
+      // deal ($60+GST, Mon–Fri inside 10:00–16:00 NZ).
+      deal_2h: isWeekdayDaytime(start, 2),
     });
   }
 

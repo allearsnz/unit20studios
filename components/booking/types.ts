@@ -5,7 +5,8 @@ export type Slot = {
   start: string; // ISO
   end: string; // ISO
   available: boolean;
-  is_peak: boolean;
+  /** A 2-hour session starting here gets the weekday-daytime rate. */
+  deal_2h: boolean;
 };
 
 export type Selection = { startIdx: number; count: number };

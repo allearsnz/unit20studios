@@ -12,7 +12,17 @@ import { DetailsForm } from "./DetailsForm";
 import { TermsAccordion } from "./TermsAccordion";
 import { BookingSummary } from "./BookingSummary";
 import { MAX_HOURS, detailsSchema, type DetailsValues, type Selection, type Slot } from "./types";
-import { BULK_PACK, FLAT_LIMITS, FLAT_TIER, calcPriceCents, formatNZD, formatNZDPlusGst } from "@/lib/pricing";
+import {
+  BULK_PACK,
+  FLAT_LIMITS,
+  FLAT_TIER,
+  WEEKDAY_DAYTIME_DEAL,
+  calcPriceCents,
+  formatNZD,
+  formatNZDPlusGst,
+  formatNZDPlusGstIncl,
+  isWeekdayDaytime,
+} from "@/lib/pricing";
 import { formatNZ } from "@/lib/timezone";
 import { getStoredSource } from "@/lib/attribution";
 import { cn } from "@/lib/utils";
@@ -90,8 +100,12 @@ export function BookingFlow() {
   const startSlot = sel ? slots[sel.startIdx] : null;
   const endSlot = sel ? slots[sel.startIdx + sel.count - 1] : null;
 
-  const totalCents = calcPriceCents(tier, duration || 0);
+  const totalCents = calcPriceCents(tier, duration || 0, startSlot?.start ?? null);
   const totalLabel = duration ? formatNZDPlusGst(totalCents) : null;
+  /** Total-to-pay with the GST-inclusive amount alongside. */
+  const totalWithGstLabel = duration ? formatNZDPlusGstIncl(totalCents) : null;
+  const dealApplied =
+    duration === 2 && !!startSlot && isWeekdayDaytime(startSlot.start, 2);
 
   const dateLabel = date ? civilLabel(date) : null;
   const timeLabel =
@@ -235,7 +249,7 @@ export function BookingFlow() {
         ) : null}
 
         {step === 0 && (
-          <StepShell title="Pick a day" hint="We open 90 days out. Off-peak is weekday daytime.">
+          <StepShell title="Pick a day" hint={`We open 90 days out. ${WEEKDAY_DAYTIME_DEAL.label}: 2 hours for ${formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}.`}>
             <Calendar value={date} min={min} max={max} onChange={(d) => setDate(d)} />
           </StepShell>
         )}
@@ -266,6 +280,11 @@ export function BookingFlow() {
                   {duration ? `${duration}h total` : "1h from"}
                 </span>
               </p>
+              {dealApplied ? (
+                <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
+                  {WEEKDAY_DAYTIME_DEAL.label} rate applied
+                </p>
+              ) : null}
               <GroupSize
                 value={groupSize}
                 min={1}
@@ -314,7 +333,7 @@ export function BookingFlow() {
                 { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
                 { label: "Name", value: getValues("name") || "—" },
                 { label: "Email", value: getValues("email") || "—" },
-                { label: "Total", value: totalLabel ?? "—", accent: true },
+                { label: "Total", value: totalWithGstLabel ?? "—", accent: true },
               ]}
             />
           </StepShell>
@@ -367,7 +386,8 @@ export function BookingFlow() {
           durationHours={duration}
           tierLabel={duration ? tier.label : null}
           groupSize={groupSize}
-          totalLabel={totalLabel}
+          totalLabel={totalWithGstLabel}
+          dealNote={dealApplied ? WEEKDAY_DAYTIME_DEAL.label : null}
         />
       </aside>
     </div>

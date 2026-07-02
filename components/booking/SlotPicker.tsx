@@ -1,8 +1,11 @@
 "use client";
 
+import { WEEKDAY_DAYTIME_DEAL } from "@/lib/pricing";
 import { formatNZ } from "@/lib/timezone";
 import { cn } from "@/lib/utils";
 import type { Slot } from "./types";
+
+const DEAL_TAG = `2h · $${WEEKDAY_DAYTIME_DEAL.twoHourPriceCents / 100}+GST`;
 
 /** Hourly slot grid. Presentational — selection logic lives in BookingFlow. */
 export function SlotPicker({
@@ -65,10 +68,10 @@ export function SlotPicker({
             <span
               className={cn(
                 "font-mono text-[10px] uppercase tracking-meta",
-                selected ? "text-bg/70" : "text-text-dim",
+                selected ? "text-bg/70" : slot.available && slot.deal_2h ? "text-accent" : "text-text-dim",
               )}
             >
-              {!slot.available ? "—" : "Available"}
+              {!slot.available ? "—" : slot.deal_2h ? DEAL_TAG : "Available"}
             </span>
           </button>
         );

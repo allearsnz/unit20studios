@@ -53,7 +53,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const total = calcPriceCents(tier, input.durationHours);
+  // Start time applies the weekday-daytime 2h deal ($60+GST) when it fits.
+  const total = calcPriceCents(tier, input.durationHours, start);
 
   // find-or-create customer
   const email = input.email.toLowerCase();

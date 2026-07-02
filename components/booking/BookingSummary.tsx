@@ -11,6 +11,7 @@ export function BookingSummary({
   tierLabel,
   groupSize,
   totalLabel,
+  dealNote,
   className,
 }: {
   dateLabel: string | null;
@@ -18,7 +19,10 @@ export function BookingSummary({
   durationHours: number;
   tierLabel: string | null;
   groupSize: number;
+  /** Total to pay, GST-explicit — e.g. "$80.00 + GST ($92.00)". */
   totalLabel: string | null;
+  /** Set when the weekday-daytime rate applies, e.g. "Weekday daytime (Mon–Fri, 10am–4pm)". */
+  dealNote?: string | null;
   className?: string;
 }) {
   const rows: Row[] = [
@@ -51,10 +55,15 @@ export function BookingSummary({
         ))}
       </dl>
 
-      <div className="mt-4 flex items-baseline justify-between border-t border-border-strong pt-4">
+      <div className="mt-4 flex items-baseline justify-between gap-4 border-t border-border-strong pt-4">
         <span className="font-mono text-meta uppercase tracking-meta text-text-muted">Total</span>
-        <span className="mono text-2xl text-accent">{totalLabel ?? "—"}</span>
+        <span className="mono text-right text-lg text-accent">{totalLabel ?? "—"}</span>
       </div>
+      {dealNote ? (
+        <p className="mt-2 font-mono text-[10px] uppercase tracking-meta text-accent">
+          {dealNote} rate
+        </p>
+      ) : null}
       <p className="mt-3 text-xs text-text-dim">Pay in person at the start of your session.</p>
     </div>
   );

@@ -1,10 +1,11 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 
 /**
- * All booking time maths runs in NZ local time so peak/off-peak and slot
- * boundaries stay correct across the spring-forward (last Sun of Sep) and
- * fall-back (first Sun of Apr) DST transitions. date-fns-tz resolves the
- * offset per-instant from the IANA database, so DST is handled automatically.
+ * All booking time maths runs in NZ local time so slot boundaries and the
+ * weekday-daytime pricing window (lib/pricing.ts) stay correct across the
+ * spring-forward (last Sun of Sep) and fall-back (first Sun of Apr) DST
+ * transitions. date-fns-tz resolves the offset per-instant from the IANA
+ * database, so DST is handled automatically.
  */
 export const NZ_TZ = "Pacific/Auckland";
 
@@ -33,27 +34,6 @@ export function nzDateHourToUtc(isoDate: string, hour: number): Date {
 /** A Date shifted into NZ local wall-clock (for reading parts). */
 export function toNZ(value: Date | string | number): Date {
   return toZonedTime(value, NZ_TZ);
-}
-
-/**
- * Peak = NZ local time at/after 16:00, OR any time on Saturday/Sunday.
- * Everything else is off-peak. (This is the authoritative rule; the 09:00–16:00
- * window in the brief is the typical weekday off-peak band.)
- */
-export function isPeakInstant(instant: Date | string | number): boolean {
-  const isoDow = Number(formatInTimeZone(instant, NZ_TZ, "i")); // 1=Mon … 7=Sun
-  if (isoDow === 6 || isoDow === 7) return true;
-  return Number(formatInTimeZone(instant, NZ_TZ, "H")) >= 16;
-}
-
-/**
- * A booking is peak if any part of it touches peak time (spanning bookings are
- * charged peak for the whole session). Checking the start and the final minute
- * covers a session that crosses the 16:00 boundary.
- */
-export function bookingIsPeak(start: Date, end: Date): boolean {
-  const lastMinute = new Date(end.getTime() - 60_000);
-  return isPeakInstant(start) || isPeakInstant(lastMinute);
 }
 
 /** "Sat 1 Jun, 7:00 PM" style label for an instant, in NZ time. */
