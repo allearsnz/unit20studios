@@ -9,10 +9,6 @@ export type Slot = {
   deal_2h: boolean;
 };
 
-export type Selection = { startIdx: number; count: number };
-
-export const MAX_HOURS = 2;
-
 /** Details step schema (RHF resolver). Mirrors the server's bookingInputSchema. */
 export const detailsSchema = z.object({
   name: z.string().trim().min(2, "Tell us your name").max(120),

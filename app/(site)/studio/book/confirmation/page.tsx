@@ -3,7 +3,12 @@ import Link from "next/link";
 import { ArrowRight, CalendarPlus, Check, Clock } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatBookingWhen } from "@/lib/timezone";
-import { formatNZDPlusGstIncl } from "@/lib/pricing";
+import {
+  BULK_PACK,
+  formatNZDPlusGst,
+  formatNZDPlusGstIncl,
+  groupSurchargeCents,
+} from "@/lib/pricing";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -50,6 +55,12 @@ export default async function ConfirmationPage({
   const tierLabel = Array.isArray(booking?.pricing_tier)
     ? booking?.pricing_tier[0]?.label
     : booking?.pricing_tier?.label;
+  // A 10-hour pack booking carries the full pack price as its total — no
+  // ordinary 1–2h booking gets anywhere near it.
+  const isPack = !!booking && booking.total_price_cents >= BULK_PACK.totalCents;
+  const surcharge = booking
+    ? groupSurchargeCents(booking.duration_hours, booking.group_size)
+    : 0;
 
   return (
     <section className="container-page flex min-h-[80vh] flex-col justify-center py-32 md:py-40">
@@ -80,9 +91,25 @@ export default async function ConfirmationPage({
               label="Where"
               value={`${site.address.street}, ${site.address.locality}`}
             />
-            <Row label="Duration" value={`${booking.duration_hours}h`} />
+            <Row
+              label="Duration"
+              value={
+                isPack
+                  ? `${booking.duration_hours}h now · ${BULK_PACK.packHours - booking.duration_hours}h to arrange`
+                  : `${booking.duration_hours}h`
+              }
+            />
             {tierLabel ? (
               <Row label="Room" value={`${tierLabel} · ${booking.group_size} people`} />
+            ) : null}
+            {isPack ? (
+              <Row label="Rate" value={`10-hour pack — first ${booking.duration_hours}h booked`} />
+            ) : null}
+            {surcharge > 0 ? (
+              <Row
+                label="Group surcharge"
+                value={`+${formatNZDPlusGst(surcharge)} · included in total`}
+              />
             ) : null}
             <Row
               label="Total"
@@ -90,6 +117,15 @@ export default async function ConfirmationPage({
               accent
             />
           </dl>
+        ) : null}
+
+        {booking && isPack ? (
+          <p className="mt-6 max-w-md text-sm text-text-muted">
+            You&apos;re on the 10-hour pack — this booking uses your first{" "}
+            {booking.duration_hours} hours. The remaining{" "}
+            {BULK_PACK.packHours - booking.duration_hours} hours are used across
+            future visits; we&apos;ll be in touch to arrange them with you.
+          </p>
         ) : null}
 
         {booking ? (

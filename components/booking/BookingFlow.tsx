@@ -1,33 +1,40 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import { Calendar } from "./Calendar";
+import { OptionPicker } from "./OptionPicker";
 import { SlotPicker } from "./SlotPicker";
 import { GroupSize } from "./GroupSize";
 import { DetailsForm } from "./DetailsForm";
 import { TermsAccordion } from "./TermsAccordion";
 import { BookingSummary } from "./BookingSummary";
-import { MAX_HOURS, detailsSchema, type DetailsValues, type Selection, type Slot } from "./types";
+import { detailsSchema, type DetailsValues, type Slot } from "./types";
 import {
   BULK_PACK,
   FLAT_LIMITS,
   FLAT_TIER,
+  GROUP_SURCHARGE,
   WEEKDAY_DAYTIME_DEAL,
-  calcPriceCents,
+  bookingOption,
+  calcBookingPriceCents,
   formatNZD,
   formatNZDPlusGst,
   formatNZDPlusGstIncl,
   isWeekdayDaytime,
+  type BookingOption,
+  type BookingOptionId,
 } from "@/lib/pricing";
 import { formatNZ } from "@/lib/timezone";
 import { getStoredSource } from "@/lib/attribution";
 import { cn } from "@/lib/utils";
 
-const STEPS = ["Date", "Time", "Group", "Details", "Terms", "Review"];
+const STEPS = ["Date", "Option", "Time", "Group", "Details", "Terms", "Review"];
+
+const PACK_SUMMARY_NOTE = `10-hour pack: this books your first ${BULK_PACK.firstSessionHours} hours — the other ${BULK_PACK.packHours - BULK_PACK.firstSessionHours} are used across future visits, and we'll arrange them with you.`;
 
 function nzToday() {
   return formatNZ(new Date(), "yyyy-MM-dd");
@@ -48,6 +55,18 @@ function civilLabel(date: string) {
   });
 }
 
+/** True when the option has at least one bookable start in `slots`. */
+function optionStartExists(slots: Slot[], opt: BookingOption): boolean {
+  return slots.some((s, i) => {
+    if (!s.available) return false;
+    for (let k = 1; k < opt.durationHours; k++) {
+      if (!slots[i + k]?.available) return false;
+    }
+    if (opt.weekdayDaytimeOnly && !s.deal_2h) return false;
+    return true;
+  });
+}
+
 declare global {
   interface Window {
     fbq?: (...args: unknown[]) => void;
@@ -64,7 +83,8 @@ export function BookingFlow() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [sel, setSel] = useState<Selection | null>(null);
+  const [option, setOption] = useState<BookingOptionId | null>(null);
+  const [startIdx, setStartIdx] = useState<number | null>(null);
   const [groupSize, setGroupSize] = useState(1);
   const [agree, setAgree] = useState(false);
   const [marketing, setMarketing] = useState(false);
@@ -82,11 +102,15 @@ export function BookingFlow() {
     if (!date) return;
     let cancelled = false;
     setLoadingSlots(true);
-    setSel(null);
+    setStartIdx(null);
     fetch(`/api/bookings/availability?date=${date}`)
       .then((r) => r.json())
       .then((d) => {
-        if (!cancelled) setSlots((d.slots as Slot[]) ?? []);
+        if (cancelled) return;
+        const next = (d.slots as Slot[]) ?? [];
+        setSlots(next);
+        // Drop an option the (new) day can no longer serve.
+        setOption((o) => (o && !optionStartExists(next, bookingOption(o)) ? null : o));
       })
       .catch(() => !cancelled && setSlots([]))
       .finally(() => !cancelled && setLoadingSlots(false));
@@ -96,16 +120,29 @@ export function BookingFlow() {
   }, [date, refreshKey]);
 
   const tier = FLAT_TIER;
-  const duration = sel?.count ?? 0;
-  const startSlot = sel ? slots[sel.startIdx] : null;
-  const endSlot = sel ? slots[sel.startIdx + sel.count - 1] : null;
+  const selectedOption = option ? bookingOption(option) : null;
+  const duration = selectedOption?.durationHours ?? 0;
+  const startSlot = startIdx !== null ? (slots[startIdx] ?? null) : null;
+  const endSlot =
+    startIdx !== null && duration ? (slots[startIdx + duration - 1] ?? null) : null;
 
-  const totalCents = calcPriceCents(tier, duration || 0, startSlot?.start ?? null);
-  const totalLabel = duration ? formatNZDPlusGst(totalCents) : null;
+  const price = option
+    ? calcBookingPriceCents({
+        tier,
+        optionId: option,
+        start: startSlot?.start ?? null,
+        groupSize,
+      })
+    : null;
+  const totalLabel = price ? formatNZDPlusGst(price.totalCents) : null;
   /** Total-to-pay with the GST-inclusive amount alongside. */
-  const totalWithGstLabel = duration ? formatNZDPlusGstIncl(totalCents) : null;
+  const totalWithGstLabel = price ? formatNZDPlusGstIncl(price.totalCents) : null;
+  const surchargeLabel =
+    price && price.surchargeCents > 0 ? `+${formatNZDPlusGst(price.surchargeCents)}` : null;
+  // Only flagged for the generic 2h option — picking a qualifying weekday
+  // start still gets the cheaper rate. The daytime option says it already.
   const dealApplied =
-    duration === 2 && !!startSlot && isWeekdayDaytime(startSlot.start, 2);
+    option === "2h" && !!startSlot && isWeekdayDaytime(startSlot.start, 2);
 
   const dateLabel = date ? civilLabel(date) : null;
   const timeLabel =
@@ -113,45 +150,31 @@ export function BookingFlow() {
       ? `${formatNZ(startSlot.start, "HH:mm")} – ${formatNZ(endSlot.end, "HH:mm")}`
       : null;
 
-  const isSelected = useCallback(
-    (i: number) => !!sel && i >= sel.startIdx && i < sel.startIdx + sel.count,
-    [sel],
-  );
-
-  const toggle = (i: number) =>
-    setSel((prev) => {
-      const slot = slots[i];
-      if (!slot?.available) return prev;
-      if (!prev) return { startIdx: i, count: 1 };
-      const { startIdx, count } = prev;
-      const end = startIdx + count - 1;
-      if (i >= startIdx && i <= end) {
-        if (count === 1) return null;
-        if (i === end) return { startIdx, count: count - 1 };
-        if (i === startIdx) return { startIdx: startIdx + 1, count: count - 1 };
-        return { startIdx: i, count: 1 };
-      }
-      if (i === startIdx - 1 && count < MAX_HOURS) return { startIdx: i, count: count + 1 };
-      if (i === end + 1 && count < MAX_HOURS) return { startIdx, count: count + 1 };
-      return { startIdx: i, count: 1 };
-    });
+  const optionDisabledReason = (id: BookingOptionId): string | null => {
+    if (loadingSlots) return "Checking availability…";
+    const opt = bookingOption(id);
+    if (optionStartExists(slots, opt)) return null;
+    if (opt.weekdayDaytimeOnly && !slots.some((s) => s.deal_2h)) return "Mon–Fri only";
+    return "No times left this day";
+  };
 
   const scrollTop = () =>
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   const canNext = useMemo(() => {
     if (step === 0) return !!date;
-    if (step === 1) return !!sel && sel.count >= 1;
-    if (step === 4) return agree;
+    if (step === 1) return !!option;
+    if (step === 2) return startIdx !== null;
+    if (step === 5) return agree;
     return true;
-  }, [step, date, sel, agree]);
+  }, [step, date, option, startIdx, agree]);
 
   const next = async () => {
-    if (step === 3) {
+    if (step === 4) {
       const ok = await trigger();
       if (!ok) return;
     }
-    if (step === 4 && !agree) {
+    if (step === 5 && !agree) {
       setAgreeError("Please accept the terms to continue.");
       return;
     }
@@ -164,10 +187,15 @@ export function BookingFlow() {
     scrollTop();
   };
 
+  const pickOption = (id: BookingOptionId) => {
+    setOption(id);
+    setStartIdx(null);
+  };
+
   const submit = async () => {
-    if (!sel || !startSlot || !date) return;
+    if (!option || !selectedOption || !startSlot || !date) return;
     if (!agree) {
-      setStep(4);
+      setStep(5);
       setAgreeError("Please accept the terms.");
       return;
     }
@@ -182,6 +210,7 @@ export function BookingFlow() {
           startTime: startSlot.start,
           durationHours: duration,
           tierSlug: tier.slug,
+          optionId: option,
           groupSize,
           name: v.name,
           email: v.email,
@@ -198,7 +227,7 @@ export function BookingFlow() {
         setSubmitError(data.error || "Something went wrong. Please try again.");
         setSubmitting(false);
         if (res.status === 409) {
-          setStep(1);
+          setStep(2);
           setRefreshKey((k) => k + 1);
         }
         scrollTop();
@@ -206,7 +235,7 @@ export function BookingFlow() {
       }
       if (typeof window !== "undefined" && window.fbq) {
         window.fbq("track", "Purchase", {
-          value: (data.totalCents ?? totalCents) / 100,
+          value: (data.totalCents ?? price?.totalCents ?? 0) / 100,
           currency: "NZD",
         });
       }
@@ -217,6 +246,14 @@ export function BookingFlow() {
       scrollTop();
     }
   };
+
+  const timeHint = selectedOption?.isPack
+    ? `You're booking the 10-hour pack (${formatNZD(BULK_PACK.totalCents)}+GST). Choose your first 2-hour session now — we'll sort the rest of your hours with you.`
+    : selectedOption?.weekdayDaytimeOnly
+      ? "Weekday-daytime starts only — your session runs inside 10am–4pm."
+      : duration === 2
+        ? "Pick a start time. Your session runs 2 hours from there."
+        : "Pick a start time.";
 
   return (
     <div ref={topRef} className="container-page grid gap-12 pb-24 pt-32 md:grid-cols-[1fr_360px] md:gap-16 md:pt-40">
@@ -234,7 +271,7 @@ export function BookingFlow() {
                 i === step ? "text-accent" : i < step ? "text-text-muted" : "text-text-dim",
               )}
             >
-              <span className="tabular-nums">{String(i + 1).padStart(2, "0")}</span> {label}
+              {label}
             </li>
           ))}
         </ol>
@@ -256,33 +293,58 @@ export function BookingFlow() {
 
         {step === 1 && (
           <StepShell
-            title="Pick your time"
-            hint={`Tap an hour, or tap the next one to make it ${MAX_HOURS}. ${MAX_HOURS}-hour max online; need longer? Email studio@unit20.nz.`}
+            title="Pick your option"
+            hint="One price covers the whole room. Need longer than 2 hours? Email studio@unit20.nz."
           >
-            <SlotPicker slots={slots} loading={loadingSlots} isSelected={isSelected} onToggle={toggle} />
+            <OptionPicker
+              value={option}
+              onChange={pickOption}
+              disabledReason={optionDisabledReason}
+            />
           </StepShell>
         )}
 
         {step === 2 && (
-          <StepShell title="Your group" hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. ${formatNZD(BULK_PACK.totalCents)}+GST for the 10-hour bulk pack — handy if you're practising weekly.`}>
+          <StepShell title="Pick your time" hint={timeHint}>
+            <SlotPicker
+              slots={slots}
+              loading={loadingSlots}
+              durationHours={duration || 1}
+              requireDaytime={!!selectedOption?.weekdayDaytimeOnly}
+              selectedIdx={startIdx}
+              onSelect={setStartIdx}
+            />
+          </StepShell>
+        )}
+
+        {step === 3 && (
+          <StepShell
+            title="Your group"
+            hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. Groups of ${GROUP_SURCHARGE.threshold + 1}+ add ${formatNZD(GROUP_SURCHARGE.oneHourCents)}+GST (1 hour) or ${formatNZD(GROUP_SURCHARGE.twoHourCents)}+GST (2 hours) — added to your total automatically.`}
+          >
             <div className="card p-7">
               <div className="flex items-baseline justify-between">
                 <h3 className="font-display text-h3 font-semibold text-text">
-                  {tier.label}
+                  {selectedOption?.label ?? tier.label}
                 </h3>
                 <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
-                  Flat rate
+                  Whole room
                 </span>
               </div>
               <p className="mono mt-5 text-2xl text-text">
                 {totalLabel ?? formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents)}
                 <span className="ml-2 font-sans text-meta text-text-muted">
-                  {duration ? `${duration}h total` : "1h from"}
+                  {selectedOption?.isPack ? `first ${duration}h now` : duration ? `${duration}h total` : "1h from"}
                 </span>
               </p>
               {dealApplied ? (
                 <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
                   {WEEKDAY_DAYTIME_DEAL.label} rate applied
+                </p>
+              ) : null}
+              {surchargeLabel ? (
+                <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
+                  {surchargeLabel} group surcharge included
                 </p>
               ) : null}
               <GroupSize
@@ -291,27 +353,17 @@ export function BookingFlow() {
                 max={FLAT_LIMITS.maxGroupSize}
                 onChange={setGroupSize}
               />
-              <p className="mt-5 font-mono text-meta uppercase tracking-meta text-text-muted">
-                More than {FLAT_LIMITS.maxGroupSize} people? An additional fee may apply —{" "}
-                <a
-                  href="/contact?subject=Studio"
-                  className="link text-accent"
-                >
-                  get in touch
-                </a>
-                .
-              </p>
             </div>
           </StepShell>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <StepShell title="Your details" hint="First booking needs a quick ID check on arrival.">
             <DetailsForm register={register} errors={errors} />
           </StepShell>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <StepShell title="The terms" hint="Two minutes. Then you're booking.">
             <TermsAccordion
               agree={agree}
@@ -323,19 +375,31 @@ export function BookingFlow() {
           </StepShell>
         )}
 
-        {step === 5 && (
+        {step === 6 && (
           <StepShell title="Review & book" hint="Last look. Payment happens in person.">
             <ReviewList
               rows={[
                 { label: "Date", value: dateLabel ?? "—" },
+                { label: "Option", value: selectedOption?.label ?? "—" },
                 { label: "Time", value: timeLabel ?? "—" },
-                { label: "Duration", value: `${duration}h` },
+                {
+                  label: "Duration",
+                  value: selectedOption?.isPack
+                    ? `${duration}h now · ${BULK_PACK.packHours - duration}h to arrange`
+                    : `${duration}h`,
+                },
                 { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
+                ...(surchargeLabel
+                  ? [{ label: "Group surcharge", value: `${surchargeLabel} · included` }]
+                  : []),
                 { label: "Name", value: getValues("name") || "—" },
                 { label: "Email", value: getValues("email") || "—" },
                 { label: "Total", value: totalWithGstLabel ?? "—", accent: true },
               ]}
             />
+            {selectedOption?.isPack ? (
+              <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
+            ) : null}
           </StepShell>
         )}
 
@@ -382,12 +446,15 @@ export function BookingFlow() {
       <aside className="md:sticky md:top-28 md:self-start">
         <BookingSummary
           dateLabel={dateLabel}
+          optionLabel={selectedOption?.label ?? null}
           timeLabel={timeLabel}
           durationHours={duration}
-          tierLabel={duration ? tier.label : null}
+          tierLabel={option ? tier.label : null}
           groupSize={groupSize}
+          surchargeLabel={surchargeLabel}
           totalLabel={totalWithGstLabel}
           dealNote={dealApplied ? WEEKDAY_DAYTIME_DEAL.label : null}
+          packNote={selectedOption?.isPack ? PACK_SUMMARY_NOTE : null}
         />
       </aside>
     </div>
