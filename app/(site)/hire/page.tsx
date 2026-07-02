@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { ArrowRight, Mail, Phone } from "lucide-react";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { Faq } from "@/components/ui/Faq";
 import { ContactStrip } from "@/components/hire/ContactStrip";
 import { ProductGrid } from "@/components/hire/ProductGrid";
+import { HIRE_SERVICES } from "@/lib/hire";
 import { productsByCategory, type Product } from "@/lib/products";
 import { breadcrumbLd, faqPageLd, serviceLd } from "@/lib/seo";
 import {
@@ -166,7 +168,7 @@ export default function HirePage() {
             </div>
             <p className="lead mt-6 max-w-lg text-pretty">
               Moving heads, washes, hazers and control. The fixture list is being
-              finalised — in the meantime, tell us the event and we'll spec a rig.
+              finalised — in the meantime, tell us the event and we&apos;ll spec a rig.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <a
@@ -237,6 +239,39 @@ export default function HirePage() {
           </div>
         </div>
       </section>
+
+      {/* 05 — Hire by service (landing pages) */}
+      <Section className="border-t border-border">
+        <SectionHeading
+          eyebrow="Hire by service"
+          title="What are you sorting?"
+          lead="Jump straight to the gear and rates for your kind of job — all in Christchurch, delivered or picked up."
+        />
+        <ul className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {HIRE_SERVICES.map((s) => (
+            <li key={s.slug}>
+              <Link
+                href={`/hire/${s.slug}`}
+                className="card card-hover group flex h-full flex-col justify-between gap-6 p-7"
+              >
+                <div>
+                  <h3 className="font-display text-h3 font-semibold text-text">
+                    {s.title}
+                  </h3>
+                  <p className="lead mt-2 text-sm text-pretty">{s.lede}</p>
+                </div>
+                <span className="inline-flex items-center gap-2 font-mono text-xs uppercase tracking-meta text-accent">
+                  {s.fromLabel}
+                  <ArrowRight
+                    className="size-4 transition-transform duration-300 group-hover:translate-x-1"
+                    aria-hidden
+                  />
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </Section>
 
       <ContactStrip
         eyebrow="Book"
