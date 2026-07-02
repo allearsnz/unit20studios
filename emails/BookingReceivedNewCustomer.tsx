@@ -12,10 +12,13 @@ export default function BookingReceivedNewCustomer({
   friendlyId = "U20-2026-0042",
   whenLabel = "Sat 1 Jun, 7:00pm – 9:00pm",
   durationHours = 2,
-  tierLabel = "Up to 4 people",
+  tierLabel = "Up to 8 people",
   groupSize = 3,
   total = "$80.00 + GST ($92.00)",
   manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
+  rateNote = null,
+  surchargeLabel = null,
+  packNote = null,
 }: BookingEmailProps) {
   return (
     <EmailLayout preview={`We've got your booking request — ${friendlyId}`}>
@@ -33,10 +36,14 @@ export default function BookingReceivedNewCustomer({
           { label: "Requested", value: whenLabel },
           { label: "Duration", value: `${durationHours}h` },
           { label: "Room", value: `${tierLabel} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
+          ...(rateNote ? [{ label: "Rate", value: rateNote }] : []),
+          ...(surchargeLabel ? [{ label: "Group surcharge", value: `${surchargeLabel} · included in total` }] : []),
           { label: "Total", value: `${total} (pay in person)`, accent: true },
           { label: "Status", value: "Pending — needs ID" },
         ]}
       />
+
+      {packNote ? <EmailText>{packNote}</EmailText> : null}
 
       <EmailText>
         Hold tight — you don&apos;t need to do anything else right now. We review

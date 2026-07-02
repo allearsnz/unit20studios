@@ -18,6 +18,12 @@ export type BookingEmailProps = {
   groupSize: number;
   total: string;
   manageUrl: string;
+  /** Rate applied, e.g. "10-hour pack — first 2h booked". */
+  rateNote?: string | null;
+  /** Group surcharge included in the total, e.g. "+$30.00+GST". */
+  surchargeLabel?: string | null;
+  /** Extra paragraph for 10-hour pack bookings. */
+  packNote?: string | null;
 };
 
 export default function BookingConfirmed({
@@ -25,10 +31,13 @@ export default function BookingConfirmed({
   friendlyId = "U20-2026-0042",
   whenLabel = "Sat 1 Jun, 7:00pm – 9:00pm",
   durationHours = 2,
-  tierLabel = "Up to 4 people",
+  tierLabel = "Up to 8 people",
   groupSize = 3,
   total = "$80.00 + GST ($92.00)",
   manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
+  rateNote = null,
+  surchargeLabel = null,
+  packNote = null,
 }: BookingEmailProps) {
   return (
     <EmailLayout preview={`You're booked — ${friendlyId}`}>
@@ -45,9 +54,13 @@ export default function BookingConfirmed({
           { label: "Where", value: ADDRESS },
           { label: "Duration", value: `${durationHours}h` },
           { label: "Room", value: `${tierLabel} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
+          ...(rateNote ? [{ label: "Rate", value: rateNote }] : []),
+          ...(surchargeLabel ? [{ label: "Group surcharge", value: `${surchargeLabel} · included in total` }] : []),
           { label: "Total", value: `${total} — pay in person`, accent: true },
         ]}
       />
+
+      {packNote ? <EmailText>{packNote}</EmailText> : null}
 
       <EmailText>
         <strong style={{ color: "#f5f1ea" }}>Getting in</strong>

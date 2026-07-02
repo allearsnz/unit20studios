@@ -1,7 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { bookingInputSchema, normalizeNZPhone } from "@/lib/validation";
-import { calcPriceCents } from "@/lib/pricing";
+import {
+  BULK_PACK,
+  FLAT_LIMITS,
+  bookingOption,
+  calcBookingPriceCents,
+  formatNZDPlusGst,
+  isWeekdayDaytime,
+} from "@/lib/pricing";
 import { sendBookingCreatedEmails } from "@/lib/notifications";
 import type { Booking, Customer, PricingTier } from "@/lib/types";
 
@@ -29,6 +36,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "That time has already passed — pick another." }, { status: 422 });
   }
 
+  // Resolve the booking option (legacy clients send only durationHours).
+  const optionId = input.optionId ?? (input.durationHours === 1 ? "1h" : "2h");
+  const option = bookingOption(optionId);
+  if (input.durationHours !== option.durationHours) {
+    return NextResponse.json(
+      { error: "That duration doesn't match the selected option." },
+      { status: 422 },
+    );
+  }
+  if (option.weekdayDaytimeOnly && !isWeekdayDaytime(start, option.durationHours)) {
+    return NextResponse.json(
+      {
+        error:
+          "The weekday-daytime rate only covers Mon–Fri sessions inside 10am–4pm — pick a qualifying start time or the standard 2-hour option.",
+      },
+      { status: 422 },
+    );
+  }
+
   let supabase;
   try {
     supabase = createAdminClient();
@@ -46,15 +72,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown pricing tier." }, { status: 422 });
   }
   const tier = tierRow as PricingTier;
-  if (input.groupSize < 1 || input.groupSize > tier.max_people) {
+  // Cap comes from code (FLAT_LIMITS), not the DB row, so it can't drift.
+  if (input.groupSize < 1 || input.groupSize > FLAT_LIMITS.maxGroupSize) {
     return NextResponse.json(
-      { error: `Group size must be between 1 and ${tier.max_people}. For larger groups, please get in touch.` },
+      { error: `Group size must be between 1 and ${FLAT_LIMITS.maxGroupSize}.` },
       { status: 422 },
     );
   }
 
-  // Start time applies the weekday-daytime 2h deal ($60+GST) when it fits.
-  const total = calcPriceCents(tier, input.durationHours, start);
+  // Base rate for the chosen option (the start time applies the
+  // weekday-daytime 2h deal where it fits) + flat surcharge for groups of 5+.
+  const { baseCents, surchargeCents, totalCents: total } = calcBookingPriceCents({
+    tier,
+    optionId,
+    start,
+    groupSize: input.groupSize,
+  });
 
   // find-or-create customer
   const email = input.email.toLowerCase();
@@ -128,9 +161,46 @@ export async function POST(req: NextRequest) {
 
   const booking = bookingRow as Booking;
 
+  // Flag pack bookings for admin: the scheduled slot is only the first 2 hours
+  // of the prepaid 10-hour block.
+  if (option.isPack) {
+    const noteLines = [
+      `10-HOUR PACK (${formatNZDPlusGst(BULK_PACK.totalCents)} prepaid block). ` +
+        `This booking is the first ${option.durationHours}h — ` +
+        `${BULK_PACK.packHours - option.durationHours}h remain to arrange with the customer.`,
+    ];
+    if (surchargeCents > 0) {
+      noteLines.push(
+        `Group of ${input.groupSize}: +${formatNZDPlusGst(surchargeCents)} surcharge included in the total.`,
+      );
+    }
+    const { error: noteError } = await supabase
+      .from("bookings")
+      .update({ internal_note: noteLines.join("\n") })
+      .eq("id", booking.id);
+    if (noteError) {
+      console.error("[bookings] failed to stamp pack internal_note", noteError);
+    }
+  }
+
+  // What the price was made of, for emails/admin.
+  const rateNote = option.isPack
+    ? `10-hour pack — first ${option.durationHours}h booked`
+    : optionId === "2h-daytime" || (optionId === "2h" && baseCents !== tier.peak_2h_price_cents)
+      ? "Weekday daytime (Mon–Fri, 10am–4pm)"
+      : null;
+
   // Emails must never block booking creation.
   try {
-    await sendBookingCreatedEmails({ booking, customer, tier, pending });
+    await sendBookingCreatedEmails({
+      booking,
+      customer,
+      tier,
+      pending,
+      rateNote,
+      surchargeCents,
+      isPack: option.isPack,
+    });
   } catch (e) {
     console.error("[bookings] email dispatch failed (booking still created)", e);
   }

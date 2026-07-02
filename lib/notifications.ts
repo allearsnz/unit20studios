@@ -6,7 +6,7 @@ import { sendEmail, notifyAdmin, icsAttachment } from "./email";
 import { createAdminClient } from "./supabase/admin";
 import { buildBookingIcs } from "./ics";
 import { formatBookingWhen } from "./timezone";
-import { formatNZDPlusGstIncl } from "./pricing";
+import { BULK_PACK, formatNZDPlusGst, formatNZDPlusGstIncl } from "./pricing";
 import { site } from "./site";
 import type { Booking, Customer, PricingTier } from "./types";
 
@@ -16,12 +16,22 @@ export async function sendBookingCreatedEmails(opts: {
   customer: Customer;
   tier: Pick<PricingTier, "label">;
   pending: boolean;
+  /** Rate line for the receipt, e.g. "10-hour pack — first 2h booked". */
+  rateNote?: string | null;
+  /** Ex-GST group surcharge included in the total (0 = none). */
+  surchargeCents?: number;
+  /** True when this is a 10-hour pack booking (first session). */
+  isPack?: boolean;
 }) {
-  const { booking, customer, tier, pending } = opts;
+  const { booking, customer, tier, pending, rateNote, surchargeCents = 0, isPack } = opts;
   const firstName = customer.name.split(/\s+/)[0] || "there";
   const whenLabel = formatBookingWhen(booking.start_time, booking.end_time);
   const total = formatNZDPlusGstIncl(booking.total_price_cents);
   const manageUrl = `${site.url}/studio/book/confirmation?id=${booking.friendly_id}`;
+  const surchargeLabel = surchargeCents > 0 ? `+${formatNZDPlusGst(surchargeCents)}` : null;
+  const packNote = isPack
+    ? `You're on the 10-hour pack (${formatNZDPlusGst(BULK_PACK.totalCents)}). This booking uses the first ${booking.duration_hours} hours — we'll be in touch to sort the rest of your hours across future visits.`
+    : null;
 
   const props = {
     firstName,
@@ -32,6 +42,9 @@ export async function sendBookingCreatedEmails(opts: {
     groupSize: booking.group_size,
     total,
     manageUrl,
+    rateNote: rateNote ?? null,
+    surchargeLabel,
+    packNote,
   };
 
   if (pending) {
@@ -55,6 +68,11 @@ export async function sendBookingCreatedEmails(opts: {
     `${customer.email} · ${customer.phone}`,
     `${whenLabel} (${booking.duration_hours}h)`,
     `${tier.label}, ${booking.group_size} people`,
+    ...(rateNote ? [`Rate: ${rateNote}`] : []),
+    ...(surchargeLabel ? [`Group surcharge: ${surchargeLabel} (included in total)`] : []),
+    ...(isPack
+      ? [`10-HOUR PACK — first session only; ${BULK_PACK.packHours - booking.duration_hours}h remain to arrange.`]
+      : []),
     `Total: ${total}`,
     `Status: ${booking.status}${pending ? " (NEW CUSTOMER — needs verification)" : ""}`,
     `Source: ${booking.source || "direct"}`,
@@ -63,7 +81,7 @@ export async function sendBookingCreatedEmails(opts: {
   ].join("\n");
 
   await notifyAdmin(
-    `New booking [${booking.status === "confirmed" ? "CONFIRMED" : "PENDING"}] — ${booking.friendly_id} ${customer.name}`,
+    `New booking${isPack ? " [10H PACK]" : ""} [${booking.status === "confirmed" ? "CONFIRMED" : "PENDING"}] — ${booking.friendly_id} ${customer.name}`,
     text,
   );
 }

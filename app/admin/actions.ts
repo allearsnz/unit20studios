@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, icsAttachment } from "@/lib/email";
 import { buildBookingIcs } from "@/lib/ics";
 import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
-import { calcPriceCents, formatNZDPlusGstIncl } from "@/lib/pricing";
+import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
 import { site } from "@/lib/site";
 import BookingConfirmed from "@/emails/BookingConfirmed";
@@ -206,8 +206,9 @@ export async function quickBook(formData: FormData) {
   const { data: tierRow } = await supabase.from("pricing_tiers").select("*").eq("slug", tierSlug).maybeSingle();
   if (!tierRow) return;
   const tier = tierRow as PricingTier;
-  // Start time applies the weekday-daytime 2h deal ($60+GST) when it fits.
-  const total = calcPriceCents(tier, durationHours, start);
+  // Start time applies the weekday-daytime 2h deal ($60+GST) when it fits;
+  // groups of 5+ add the flat surcharge ($20+GST 1h / $30+GST 2h+).
+  const total = calcPriceCents(tier, durationHours, start) + groupSurchargeCents(durationHours, groupSize);
 
   const email = rawEmail || `walkin-${Date.now()}@unit20.local`;
   const phone = rawPhone ? (normalizeNZPhone(rawPhone) ?? rawPhone) : "—";
