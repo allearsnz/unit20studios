@@ -42,7 +42,6 @@ export function Footer() {
               <Wordmark className="w-[124px]" />
             </Link>
             <p className="lead mt-4 max-w-xs text-balance">
-              A practice studio, hire house and venue in central Christchurch.
               Real club gear, by the hour.
             </p>
             <address className="mt-6 font-mono text-meta not-italic leading-relaxed text-text-muted">
