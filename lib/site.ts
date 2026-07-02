@@ -3,7 +3,7 @@
 export const site = {
   name: "Unit 20",
   legalName: "Unit 20 Studios",
-  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://unit20.nz",
+  url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://studio.unit20.nz",
   email: process.env.RESEND_REPLY_TO ?? "studio@unit20.nz",
   phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? "",
   tagline: "DJ practice studio, gear hire & venue",
@@ -48,9 +48,11 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
   {
     title: "Hire",
     links: [
-      { label: "DJ equipment", href: "/hire#dj-equipment" },
-      { label: "Sound equipment", href: "/hire#sound-equipment" },
-      { label: "Lighting", href: "/hire#lighting-equipment" },
+      { label: "CDJ hire", href: "/hire/cdj-hire-christchurch" },
+      { label: "Sound hire", href: "/hire/sound-hire-christchurch" },
+      { label: "PA hire", href: "/hire/pa-hire-christchurch" },
+      { label: "Backline hire", href: "/hire/backline-hire-christchurch" },
+      { label: "Lighting hire", href: "/hire/lighting-hire-christchurch" },
       { label: "Full production", href: "/hire#full-production" },
     ],
   },

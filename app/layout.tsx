@@ -32,7 +32,7 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://unit20.nz";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://studio.unit20.nz";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

@@ -19,10 +19,13 @@ export const metadata: Metadata = {
 
 const organizationLd = {
   "@context": "https://schema.org",
-  "@type": "Organization",
+  "@type": ["Organization", "LocalBusiness"],
+  "@id": `${site.url}/#business`,
   name: site.name,
   legalName: site.legalName,
+  description: site.tagline,
   url: site.url,
+  image: `${site.url}/opengraph-image`,
   email: site.email,
   ...(site.phone ? { telephone: site.phone } : {}),
   address: {
@@ -32,6 +35,11 @@ const organizationLd = {
     addressRegion: site.address.region,
     postalCode: site.address.postalCode,
     addressCountry: site.address.country,
+  },
+  geo: {
+    "@type": "GeoCoordinates",
+    latitude: site.geo.lat,
+    longitude: site.geo.lng,
   },
   sameAs: [site.social.instagram],
   makesOffer: [

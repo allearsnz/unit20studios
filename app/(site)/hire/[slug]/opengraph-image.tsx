@@ -8,9 +8,10 @@ export const contentType = "image/png";
 export default async function HireOgImage({
   params,
 }: {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 }) {
-  const service = getHireService(params.slug);
+  const { slug } = await params;
+  const service = getHireService(slug);
   const title = service?.title ?? "Gear hire";
   const lede = service?.lede ?? "Audio and lighting hire in Christchurch.";
   const fromLabel = service?.fromLabel ?? "";
