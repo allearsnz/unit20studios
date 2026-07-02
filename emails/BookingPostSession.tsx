@@ -23,8 +23,9 @@ export default function BookingPostSession({
         us; we read every message and we&apos;d rather know.
       </EmailText>
       <EmailText>
-        When you&apos;re ready for the next one, off-peak hours (weekday daytime)
-        are the quietest time to really dig in. Same room, same gear, waiting.
+        When you&apos;re ready for the next one, weekday daytimes (Mon–Fri,
+        10am–4pm) are the quietest time to really dig in — and two hours then is
+        just $60+GST. Same room, same gear, waiting.
       </EmailText>
 
       <EmailButton href={bookUrl}>Book another session</EmailButton>

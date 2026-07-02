@@ -17,7 +17,7 @@ const SPECS = [
   { k: "Players", v: "4× Pioneer CDJ-3000" },
   { k: "Mixer", v: "Pioneer DJM-A9" },
   { k: "Monitoring", v: "QSC K12.2 + JBL EON618S sub" },
-  { k: "Capacity", v: "Up to 10 people" },
+  { k: "Capacity", v: "Up to 4 people" },
   { k: "Connectivity", v: "USB · rec out · aux in" },
   { k: "Hours", v: "07:00 – 24:00, 7 days" },
 ];
@@ -114,7 +114,7 @@ export default function TheRoomPage() {
         <div className="flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
           <SectionHeading
             title="Want to see it in person?"
-            lead="Book an off-peak hour for the quietest run, or get in touch for a look around."
+            lead="Book a weekday-daytime session for the quietest run — Mon–Fri 10am–4pm, 2 hours for $60+GST — or get in touch for a look around."
           />
           <div className="flex shrink-0 flex-wrap gap-3">
             <Link href="/studio/book" className="btn btn-primary">

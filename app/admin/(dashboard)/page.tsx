@@ -3,7 +3,7 @@ import { CalendarOff, Zap } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PaymentBadge, StatusBadge } from "@/components/admin/badges";
 import { formatNZ, nzDateHourToUtc } from "@/lib/timezone";
-import { formatNZD } from "@/lib/pricing";
+import { formatNZDPlusGst } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 import type { BookingWithRelations } from "@/lib/types";
 
@@ -122,7 +122,7 @@ export default async function AdminDashboard({
                   <td className="py-3 pr-4 text-text-muted">
                     {b.pricing_tier?.label ?? "—"} · {b.group_size}
                   </td>
-                  <td className="py-3 pr-4 text-right mono text-text">{formatNZD(b.total_price_cents)}</td>
+                  <td className="py-3 pr-4 text-right mono text-text">{formatNZDPlusGst(b.total_price_cents)}</td>
                   <td className="py-3 pr-4">
                     <StatusBadge status={b.status} />
                   </td>

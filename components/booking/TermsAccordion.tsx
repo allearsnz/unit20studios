@@ -64,7 +64,7 @@ export function TermsAccordion({
           className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
         />
         <span className="text-sm text-text-muted">
-          Send me the occasional Unit 20 update — new gear, off-peak deals,
+          Send me the occasional Unit 20 update — new gear, weekday deals,
           events. No spam, leave anytime.
         </span>
       </label>

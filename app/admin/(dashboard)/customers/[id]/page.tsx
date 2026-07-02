@@ -5,7 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { VerifyCustomerButton } from "@/components/admin/VerifyCustomerButton";
 import { StatusBadge } from "@/components/admin/badges";
 import { formatNZ } from "@/lib/timezone";
-import { formatNZD } from "@/lib/pricing";
+import { formatNZDPlusGst } from "@/lib/pricing";
 import { formatNZPhone } from "@/lib/validation";
 import type { Booking, Customer } from "@/lib/types";
 
@@ -99,7 +99,7 @@ export default async function CustomerDetailPage({
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="mono text-sm text-text">{formatNZD(b.total_price_cents)}</span>
+                      <span className="mono text-sm text-text">{formatNZDPlusGst(b.total_price_cents)}</span>
                       <StatusBadge status={b.status} />
                     </div>
                   </Link>

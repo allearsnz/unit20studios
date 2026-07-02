@@ -8,7 +8,7 @@ import { InternalNote } from "@/components/admin/InternalNote";
 import { VerifyCustomerButton } from "@/components/admin/VerifyCustomerButton";
 import { StatusBadge } from "@/components/admin/badges";
 import { formatNZ } from "@/lib/timezone";
-import { formatNZD } from "@/lib/pricing";
+import { formatNZDPlusGstIncl } from "@/lib/pricing";
 import { formatNZPhone } from "@/lib/validation";
 import type { BookingWithRelations } from "@/lib/types";
 
@@ -65,7 +65,7 @@ export default async function BookingDetailPage({
                 ["When", `${formatNZ(b.start_time, "EEE d MMM yyyy")} · ${formatNZ(b.start_time, "HH:mm")}–${formatNZ(b.end_time, "HH:mm")}`],
                 ["Duration", `${b.duration_hours}h`],
                 ["Room", `${b.pricing_tier?.label ?? "—"} · ${b.group_size} people`],
-                ["Total", formatNZD(b.total_price_cents)],
+                ["Total", formatNZDPlusGstIncl(b.total_price_cents)],
                 ["Source", b.source || "direct"],
                 ["Booked", formatNZ(b.created_at, "d MMM yyyy, HH:mm")],
               ]}

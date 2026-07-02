@@ -33,18 +33,8 @@ export default function QuickBookPage() {
         </div>
 
         <div>
-          <label htmlFor="tierSlug" className="font-mono text-meta uppercase tracking-meta text-text-muted">
-            Room
-          </label>
-          <select id="tierSlug" name="tierSlug" defaultValue="small" className="input mt-2 [color-scheme:dark]">
-            <option value="small">Up to 5</option>
-            <option value="large">6 to 10</option>
-          </select>
-        </div>
-
-        <div>
           <label htmlFor="groupSize" className="font-mono text-meta uppercase tracking-meta text-text-muted">
-            People
+            People (standard rate covers up to 4)
           </label>
           <input id="groupSize" name="groupSize" type="number" min={1} max={10} defaultValue={1} className="input mt-2" />
         </div>

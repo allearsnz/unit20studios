@@ -4,14 +4,14 @@ import { ArrowRight, Check, Mail } from "lucide-react";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { Faq } from "@/components/ui/Faq";
-import { BULK_PACK, FLAT_TIER, formatNZDPlusGst } from "@/lib/pricing";
+import { BULK_PACK, FLAT_TIER, WEEKDAY_DAYTIME_DEAL, formatNZDPlusGst } from "@/lib/pricing";
 import { breadcrumbLd, faqPageLd, serviceLd } from "@/lib/seo";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Studio pricing — $50+GST/hr, $75+GST/2hr",
+  title: "Studio pricing — $50+GST/hr, $80+GST/2hr",
   description:
-    "Unit 20 studio pricing. Flat $50+GST per hour or $75+GST for two hours. Bulk 10-hour pack at $25+GST/hr. Longer or larger? Get in touch.",
+    "Unit 20 studio pricing. $50+GST per hour, $80+GST for two hours — or $60+GST for two hours weekday daytime (Mon–Fri, 10am–4pm). Bulk 10-hour pack at $25+GST/hr.",
   alternates: { canonical: "/studio/pricing" },
 };
 
@@ -23,6 +23,10 @@ const INCLUDED = [
 ];
 
 const FAQS = [
+  {
+    q: "When does the $60 two-hour rate apply?",
+    a: "Any 2-hour session on a weekday (Mon–Fri) that sits inside 10am–4pm — so a start between 10am and 2pm — is $60+GST instead of the standard $80+GST. Evenings and weekends are the standard rate.",
+  },
   {
     q: "Is there a deposit?",
     a: "No deposit for standard 1 or 2-hour sessions — pay in person at the start by card or cash. Bulk packs are prepaid by invoice.",
@@ -78,6 +82,11 @@ export default function PricingPage() {
                 url: "/studio/book",
               },
               {
+                name: `2 hours — ${WEEKDAY_DAYTIME_DEAL.label}`,
+                price: (WEEKDAY_DAYTIME_DEAL.twoHourPriceCents / 100).toFixed(2),
+                url: "/studio/book",
+              },
+              {
                 name: "10-hour bulk pack",
                 price: (BULK_PACK.totalCents / 100).toFixed(2),
                 url: "/contact?subject=Studio",
@@ -97,7 +106,7 @@ export default function PricingPage() {
           as="h1"
           eyebrow="Studio · Pricing"
           title="Pay as you go, no contracts."
-          lead="One price for the room. Book by the hour and pay on arrival, or buy a bulk pack and save."
+          lead="One price for the room. Book by the hour and pay on arrival, or buy a bulk pack and save. Weekday daytime (Mon–Fri, 10am–4pm): 2 hours for $60+GST."
         />
 
         <div className="mt-14 grid gap-4 md:grid-cols-2">
@@ -120,12 +129,18 @@ export default function PricingPage() {
               <PriceRow
                 label="2 hours"
                 value={formatNZDPlusGst(FLAT_TIER.peak_2h_price_cents)}
+              />
+              <PriceRow
+                label="2 hours · weekday daytime"
+                value={formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}
                 accent
               />
             </ul>
 
             <p className="mt-6 border-t border-border pt-4 font-mono text-meta uppercase tracking-meta text-text-muted">
-              For bookings larger than 4 people, an additional fee may apply.
+              Weekday daytime = Mon–Fri, sessions inside 10am–4pm. All prices
+              +GST. For bookings larger than 4 people, an additional fee may
+              apply.
             </p>
 
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">

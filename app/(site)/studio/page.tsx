@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Clock, MapPin, Users } from "lucide-react";
+import { ArrowRight, Banknote, Clock, MapPin, Users } from "lucide-react";
 import { ParallaxPhoto } from "@/components/studio/ParallaxPhoto";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { Section, SectionHeading } from "@/components/ui/Section";
-import { BULK_PACK, FLAT_TIER, formatNZDPlusGst } from "@/lib/pricing";
+import { BULK_PACK, FLAT_TIER, WEEKDAY_DAYTIME_DEAL, formatNZDPlusGst } from "@/lib/pricing";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "The Studio — practice on real club gear",
   description:
-    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 7am–midnight, from $35/hr off-peak.",
+    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 7am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm) two-hour sessions just $60+GST.",
   alternates: { canonical: "/studio" },
   openGraph: { title: "Unit 20 — The Studio", url: "/studio" },
 };
@@ -65,6 +65,13 @@ const serviceLd = {
       priceCurrency: "NZD",
       url: `${site.url}/studio/book`,
     },
+    {
+      "@type": "Offer",
+      name: `2 hour studio session — ${WEEKDAY_DAYTIME_DEAL.label}`,
+      price: (WEEKDAY_DAYTIME_DEAL.twoHourPriceCents / 100).toFixed(2),
+      priceCurrency: "NZD",
+      url: `${site.url}/studio/book`,
+    },
   ],
 };
 
@@ -98,7 +105,7 @@ export default function StudioPage() {
               </Link>
             </div>
 
-            <dl className="mt-12 grid grid-cols-3 gap-4 border-t border-border pt-6 font-mono text-meta uppercase tracking-meta text-text-muted">
+            <dl className="mt-12 grid grid-cols-2 gap-4 border-t border-border pt-6 font-mono text-meta uppercase tracking-meta text-text-muted sm:grid-cols-4">
               <div className="flex flex-col gap-1">
                 <Clock className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Hours</dt>
@@ -110,9 +117,14 @@ export default function StudioPage() {
                 <dd>Up to 4</dd>
               </div>
               <div className="flex flex-col gap-1">
-                <MapPin className="h-4 w-4 text-accent" aria-hidden />
+                <Banknote className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Price from</dt>
                 <dd>$50+GST/hr</dd>
+              </div>
+              <div className="flex flex-col gap-1">
+                <MapPin className="h-4 w-4 text-accent" aria-hidden />
+                <dt className="sr-only">Location</dt>
+                <dd>Southwark St, Chch</dd>
               </div>
             </dl>
           </div>
@@ -156,7 +168,13 @@ export default function StudioPage() {
             </div>
             <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border">
               <PriceCell label="1 hour" value={formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents)} />
-              <PriceCell label="2 hours" value={formatNZDPlusGst(FLAT_TIER.peak_2h_price_cents)} accent />
+              <PriceCell label="2 hours" value={formatNZDPlusGst(FLAT_TIER.peak_2h_price_cents)} />
+              <PriceCell
+                className="col-span-2"
+                label={`2 hours · ${WEEKDAY_DAYTIME_DEAL.label}`}
+                value={formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}
+                accent
+              />
             </div>
             <p className="mt-5 font-mono text-meta uppercase tracking-meta text-text-muted">
               For bookings larger than 4 people, an additional fee may apply.
@@ -277,13 +295,15 @@ function PriceCell({
   label,
   value,
   accent,
+  className,
 }: {
   label: string;
   value: string;
   accent?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="bg-bg-elev px-5 py-5">
+    <div className={`bg-bg-elev px-5 py-5 ${className ?? ""}`}>
       <p className="font-mono text-meta uppercase tracking-meta text-text-muted">
         {label}
       </p>
