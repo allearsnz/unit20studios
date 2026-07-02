@@ -5,8 +5,8 @@ import { isWeekdayDaytime } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
-const OPEN_HOUR = 7;
-const CLOSE_HOUR = 24; // slots start 07:00 … 23:00
+const OPEN_HOUR = 10; // studio opens 10:00
+const CLOSE_HOUR = 24; // slots start 10:00 … 23:00
 const BUFFER_MS = 15 * 60 * 1000;
 
 type Span = { start_time: string; end_time: string };

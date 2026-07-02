@@ -60,7 +60,7 @@ export default async function ContactPage({
             </address>
           </Detail>
           <Detail label="Hours">
-            <p className="text-text">07:00 – 24:00, 7 days</p>
+            <p className="text-text">10:00 – 24:00, 7 days</p>
             <p className="mt-1 text-sm text-text-dim">By booking — buzz on arrival.</p>
           </Detail>
           <Detail label="Follow">
