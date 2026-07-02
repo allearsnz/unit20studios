@@ -3,7 +3,8 @@ import Link from "next/link";
 import { ArrowRight, CalendarPlus, Check, Clock } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { formatBookingWhen } from "@/lib/timezone";
-import { formatNZD } from "@/lib/pricing";
+import { formatNZDPlusGstIncl } from "@/lib/pricing";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Booking confirmation",
@@ -17,7 +18,6 @@ type ConfirmBooking = {
   duration_hours: number;
   total_price_cents: number;
   group_size: number;
-  is_peak: boolean;
   status: string;
   pricing_tier: { label: string } | { label: string }[] | null;
 };
@@ -36,7 +36,7 @@ export default async function ConfirmationPage({
       const { data } = await supabase
         .from("bookings")
         .select(
-          "friendly_id,start_time,end_time,duration_hours,total_price_cents,group_size,is_peak,status, pricing_tier:pricing_tiers(label)",
+          "friendly_id,start_time,end_time,duration_hours,total_price_cents,group_size,status, pricing_tier:pricing_tiers(label)",
         )
         .eq("friendly_id", id)
         .maybeSingle();
@@ -76,12 +76,29 @@ export default async function ConfirmationPage({
           <dl className="mt-10 border-t border-border">
             <Row label="Reference" value={booking.friendly_id} mono />
             <Row label="When" value={formatBookingWhen(booking.start_time, booking.end_time)} />
+            <Row
+              label="Where"
+              value={`${site.address.street}, ${site.address.locality}`}
+            />
             <Row label="Duration" value={`${booking.duration_hours}h`} />
             {tierLabel ? (
               <Row label="Room" value={`${tierLabel} · ${booking.group_size} people`} />
             ) : null}
-            <Row label="Total" value={`${formatNZD(booking.total_price_cents)} · pay in person`} accent />
+            <Row
+              label="Total"
+              value={`${formatNZDPlusGstIncl(booking.total_price_cents)} · pay in person`}
+              accent
+            />
           </dl>
+        ) : null}
+
+        {booking ? (
+          <p className="mt-6 max-w-md text-sm text-text-muted">
+            On the day, come to {site.address.street} at your booking time —
+            someone from Unit 20 will meet you there and let you in. Bring a USB
+            with your tracks, your own headphones, and photo ID if it&apos;s your
+            first visit.
+          </p>
         ) : null}
 
         <div className="mt-10 flex flex-wrap gap-3">

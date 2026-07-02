@@ -5,6 +5,9 @@ import {
   EmailLayout,
   EmailText,
 } from "./components/EmailLayout";
+import { site } from "@/lib/site";
+
+const ADDRESS = `${site.address.street}, ${site.address.locality}`;
 
 export type BookingEmailProps = {
   firstName: string;
@@ -22,9 +25,9 @@ export default function BookingConfirmed({
   friendlyId = "U20-2026-0042",
   whenLabel = "Sat 1 Jun, 7:00pm – 9:00pm",
   durationHours = 2,
-  tierLabel = "Up to 5 people",
+  tierLabel = "Up to 4 people",
   groupSize = 3,
-  total = "$75.00+GST",
+  total = "$80.00 + GST ($92.00)",
   manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
 }: BookingEmailProps) {
   return (
@@ -39,11 +42,19 @@ export default function BookingConfirmed({
         rows={[
           { label: "Reference", value: friendlyId },
           { label: "When", value: whenLabel },
+          { label: "Where", value: ADDRESS },
           { label: "Duration", value: `${durationHours}h` },
           { label: "Room", value: `${tierLabel} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
-          { label: "Total", value: `${total} (pay in person)`, accent: true },
+          { label: "Total", value: `${total} — pay in person`, accent: true },
         ]}
       />
+
+      <EmailText>
+        <strong style={{ color: "#f5f1ea" }}>Getting in</strong>
+        <br />
+        Come to {ADDRESS} at your booking time — someone from Unit 20 will meet
+        you there and let you in, so there&apos;s nothing to sort out beforehand.
+      </EmailText>
 
       <EmailText>
         Turn up a couple of minutes early. Bring a USB or two with your tracks,

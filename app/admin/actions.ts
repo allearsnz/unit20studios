@@ -8,7 +8,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail, icsAttachment } from "@/lib/email";
 import { buildBookingIcs } from "@/lib/ics";
 import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
-import { calcPriceCents } from "@/lib/pricing";
+import { calcPriceCents, formatNZDPlusGstIncl } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
 import { site } from "@/lib/site";
 import BookingConfirmed from "@/emails/BookingConfirmed";
@@ -36,7 +36,7 @@ function emailProps(b: FullBooking) {
     durationHours: b.duration_hours,
     tierLabel: b.pricing_tier.label,
     groupSize: b.group_size,
-    total: `${new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(b.total_price_cents / 100)}+GST`,
+    total: formatNZDPlusGstIncl(b.total_price_cents),
     manageUrl: `${site.url}/studio/book/confirmation?id=${b.friendly_id}`,
   };
 }
@@ -44,7 +44,38 @@ function emailProps(b: FullBooking) {
 export async function setBookingStatus(id: string, status: BookingStatus) {
   await assertAdmin();
   const supabase = createAdminClient();
-  await supabase.from("bookings").update({ status }).eq("id", id);
+
+  if (status === "confirmed") {
+    // Atomically claim the pending → confirmed transition so the customer
+    // confirmation email is sent exactly once, even on double-clicks or
+    // concurrent admins. Any other transition to "confirmed" (e.g. undoing a
+    // "completed") just updates the row without re-emailing.
+    const { data: transitioned } = await supabase
+      .from("bookings")
+      .update({ status })
+      .eq("id", id)
+      .eq("status", "pending_verification")
+      .select("id")
+      .maybeSingle();
+
+    if (transitioned) {
+      const booking = await getFullBooking(id);
+      if (booking?.customer.email) {
+        const ics = buildBookingIcs(booking);
+        await sendEmail({
+          to: booking.customer.email,
+          subject: `You're booked — ${booking.friendly_id}`,
+          react: createElement(BookingConfirmed, emailProps(booking)),
+          attachments: ics ? [icsAttachment(`unit20-${booking.friendly_id}.ics`, ics)] : undefined,
+        });
+      }
+    } else {
+      await supabase.from("bookings").update({ status }).eq("id", id);
+    }
+  } else {
+    await supabase.from("bookings").update({ status }).eq("id", id);
+  }
+
   revalidatePath(`/admin/bookings/${id}`);
   revalidatePath("/admin");
 }
@@ -161,7 +192,9 @@ export async function quickBook(formData: FormData) {
   const rawPhone = String(formData.get("phone") ?? "").trim();
   const startInput = String(formData.get("start") ?? "");
   const durationHours = Math.max(1, Math.min(8, Number(formData.get("durationHours") ?? 1)));
-  const tierSlug = String(formData.get("tierSlug") ?? "small") === "large" ? "large" : "small";
+  // Single flat tier — the legacy "large" tier is retired. Bigger groups are
+  // arranged by email; admin can still key the true headcount here.
+  const tierSlug = "small";
   const groupSize = Math.max(1, Math.min(10, Number(formData.get("groupSize") ?? 1)));
   const markPaid = formData.get("markPaid") === "on";
   const doEmail = formData.get("sendEmail") === "on";
@@ -173,7 +206,8 @@ export async function quickBook(formData: FormData) {
   const { data: tierRow } = await supabase.from("pricing_tiers").select("*").eq("slug", tierSlug).maybeSingle();
   if (!tierRow) return;
   const tier = tierRow as PricingTier;
-  const total = calcPriceCents(tier, durationHours);
+  // Start time applies the weekday-daytime 2h deal ($60+GST) when it fits.
+  const total = calcPriceCents(tier, durationHours, start);
 
   const email = rawEmail || `walkin-${Date.now()}@unit20.local`;
   const phone = rawPhone ? (normalizeNZPhone(rawPhone) ?? rawPhone) : "—";
@@ -222,7 +256,7 @@ export async function quickBook(formData: FormData) {
         durationHours,
         tierLabel: tier.label,
         groupSize,
-        total: `${new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(total / 100)}+GST`,
+        total: formatNZDPlusGstIncl(total),
         manageUrl: `${site.url}/studio/book/confirmation?id=${booking.friendly_id}`,
       }),
     });

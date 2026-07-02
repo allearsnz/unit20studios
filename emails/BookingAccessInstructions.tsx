@@ -4,6 +4,9 @@ import {
   EmailLayout,
   EmailText,
 } from "./components/EmailLayout";
+import { site } from "@/lib/site";
+
+const ADDRESS = `${site.address.street}, ${site.address.locality}`;
 
 export type BookingAccessInstructionsProps = {
   firstName: string;
@@ -21,32 +24,24 @@ export default function BookingAccessInstructions({
       <EmailHeading>You&apos;re all set.</EmailHeading>
       <EmailText>
         Thanks {firstName}, your payment&apos;s come through and your session is
-        locked in. Here&apos;s everything you need to get into the space.
+        locked in. Here&apos;s everything you need for the day.
       </EmailText>
 
       <DetailPanel
         rows={[
           { label: "Reference", value: friendlyId },
           { label: "When", value: whenLabel },
-          { label: "Where", value: "20 Southwark Street, Christchurch Central" },
+          { label: "Where", value: ADDRESS },
         ]}
       />
 
-      {/* TODO(Will): replace the placeholder access steps below with the real
-          self-service entry instructions (door code, buzzer, which entrance,
-          parking, etc). Keep it short and step-by-step. */}
       <EmailText>
         <strong style={{ color: "#f5f1ea" }}>Getting in</strong>
         <br />
-        Head to 20 Southwark Street, Christchurch Central. [PLACEHOLDER — entry
-        instructions: use the [door on X / buzzer / keypad code], go [up the
-        stairs / down the hall] to Unit 20. Will edit this with the real steps.]
-      </EmailText>
-
-      <EmailText>
-        I&apos;ll meet you at the space at your start time ({whenLabel}) to get
-        you set up and answer any questions — so you don&apos;t need to sort
-        anything out on your own before then.
+        Come to {ADDRESS}, {site.address.region} at your booking time. Someone
+        from Unit 20 will meet you at the door, let you in and get you set up on
+        the decks — there&apos;s no code or keypad to worry about, and nothing to
+        sort out on your own beforehand.
       </EmailText>
 
       <EmailText>

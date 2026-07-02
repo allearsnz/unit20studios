@@ -6,7 +6,7 @@ import { sendEmail, notifyAdmin, icsAttachment } from "./email";
 import { createAdminClient } from "./supabase/admin";
 import { buildBookingIcs } from "./ics";
 import { formatBookingWhen } from "./timezone";
-import { formatNZD } from "./pricing";
+import { formatNZDPlusGstIncl } from "./pricing";
 import { site } from "./site";
 import type { Booking, Customer, PricingTier } from "./types";
 
@@ -20,7 +20,7 @@ export async function sendBookingCreatedEmails(opts: {
   const { booking, customer, tier, pending } = opts;
   const firstName = customer.name.split(/\s+/)[0] || "there";
   const whenLabel = formatBookingWhen(booking.start_time, booking.end_time);
-  const total = formatNZD(booking.total_price_cents);
+  const total = formatNZDPlusGstIncl(booking.total_price_cents);
   const manageUrl = `${site.url}/studio/book/confirmation?id=${booking.friendly_id}`;
 
   const props = {
