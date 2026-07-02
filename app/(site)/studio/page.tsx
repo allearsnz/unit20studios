@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Banknote, Clock, MapPin, Users } from "lucide-react";
 import { ParallaxPhoto } from "@/components/studio/ParallaxPhoto";
@@ -19,22 +20,22 @@ const GEAR = [
   {
     n: "01",
     name: "4× Pioneer CDJ-3000",
-    spec: "Four flagship players, all linked. The same decks you'll meet in any club booth.",
+    spec: "Flagship players, all linked.",
   },
   {
     n: "02",
     name: "Pioneer DJM-A9",
-    spec: "Industry-standard 4-channel club mixer. Learn the board that actually runs the night.",
+    spec: "Industry-standard 4-channel club mixer.",
   },
   {
     n: "03",
     name: "QSC K12.2 + JBL EON618S",
-    spec: "QSC K12.2 tops (2000W) and a JBL EON618S 18-inch sub. Loud, full-range, honest.",
+    spec: "2000W tops and an 18-inch sub. Loud and honest.",
   },
   {
     n: "04",
     name: "The room",
-    spec: "Low light, treated walls, a couch and good air. Custom lighting and temperature control. 5m x 6m, 30 sqm.",
+    spec: "30 sqm, low light, treated walls, custom lighting and temperature control.",
   },
 ];
 
@@ -84,16 +85,16 @@ export default function StudioPage() {
       <section className="relative overflow-hidden border-b border-border">
         <div className="container-page grid items-center gap-10 pb-16 pt-32 md:min-h-[88vh] md:grid-cols-[1.05fr_0.95fr] md:gap-6 md:pb-24 md:pt-36">
           <div className="max-w-xl">
-            <p className="eyebrow">DJ studio hire · Christchurch</p>
+            <p className="eyebrow">DJ studio hire — Christchurch</p>
             <h1 className="display mt-5">
               Real club gear,
               <br />
               by the hour.
             </h1>
             <p className="lead mt-6 max-w-md">
-              Whether you&apos;re prepping a gig, recording a mix or learning
-              the gear, our DJ booth is ready when you are. Four CDJ-3000s, a
-              club mixer and proper monitoring. Show up and play.
+              Prep a gig, record a mix or learn the gear. Four CDJ-3000s, a
+              club mixer and proper monitoring, ready when you are. Show up
+              and play.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/studio/book" className="btn btn-primary">
@@ -144,7 +145,7 @@ export default function StudioPage() {
           <SectionHeading
             eyebrow="Pricing"
             title="Pay as you go, no contracts."
-            lead="Book by the hour and pay when you arrive. One price for the whole room. Practising weekly? Grab the bulk pack and save."
+            lead="Book by the hour, pay when you arrive. One price covers the whole room."
           />
           <Link
             href="/studio/pricing"
@@ -217,11 +218,33 @@ export default function StudioPage() {
       {/* the kit */}
       <Section className="border-t border-border">
         <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
-          <SectionHeading
-            eyebrow="The kit"
-            title="Professional equipment."
-            lead="Industry-standard Pioneer DJ throughout. Same setup every session, so there's nothing to relearn between bookings."
-          />
+          <div>
+            <SectionHeading
+              eyebrow="The kit"
+              title="What you get."
+              lead="Industry-standard Pioneer DJ throughout. Same setup every session."
+            />
+            <Link
+              href="/studio/the-room"
+              className="group relative mt-8 block aspect-[4/3] overflow-hidden border border-border bg-bg-elev"
+            >
+              <Image
+                src="/theroom.webp"
+                alt="Inside the Unit 20 booth: four Pioneer CDJ-3000s and a DJM-A9 mixer"
+                fill
+                sizes="(min-width: 768px) 35vw, 100vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+              />
+              <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-bg/80 to-transparent" aria-hidden />
+              <span className="absolute bottom-4 left-4 inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-text">
+                See the room
+                <ArrowRight
+                  className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
+                  aria-hidden
+                />
+              </span>
+            </Link>
+          </div>
           <ul className="-mt-2">
             {GEAR.map((g) => (
               <li
