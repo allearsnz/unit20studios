@@ -56,6 +56,7 @@ export interface Booking {
   internal_note: string | null;
   reminder_sent_at: string | null;
   post_session_sent_at: string | null;
+  access_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
