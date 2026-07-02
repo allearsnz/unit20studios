@@ -106,10 +106,17 @@ export default async function HireServicePage({
   const wantsPaSection = service.categories.some((c) =>
     ["speaker", "subwoofer"].includes(c),
   );
-  const wantsLighting = service.slug === "lighting-hire-christchurch";
 
   const djProducts = wantsDjSection ? djSectionProducts(service.slug) : [];
   const paProducts = wantsPaSection ? paSectionProducts() : [];
+
+  const faqs = [...(service.extraFaqs ?? []), ...HIRE_FAQS];
+  const otherServices = HIRE_SERVICES.filter((s) => s.slug !== service.slug);
+
+  // Running section number for the "01 — ..." eyebrows.
+  let sectionNo = 0;
+  const eyebrow = (label: string) =>
+    `${String(++sectionNo).padStart(2, "0")} — ${label}`;
 
   const heroMailto = buildHireMailto({ subject: `Hire enquiry: ${service.shortTitle}` });
 
@@ -123,7 +130,7 @@ export default async function HireServicePage({
             path: `/hire/${service.slug}`,
             description: service.description,
           }),
-          faqPageLd(HIRE_FAQS),
+          faqPageLd(faqs),
           breadcrumbLd([
             { name: "Hire", path: "/hire" },
             { name: service.shortTitle, path: `/hire/${service.slug}` },
@@ -164,11 +171,27 @@ export default async function HireServicePage({
         </div>
       </Section>
 
+      {/* per-service intro copy — keeps each landing page distinct */}
+      {service.intro ? (
+        <Section className="border-t border-border">
+          <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
+            <SectionHeading title={service.intro.title} />
+            <div className="space-y-5">
+              {service.intro.paragraphs.map((p) => (
+                <p key={p} className="lead max-w-2xl text-pretty">
+                  {p}
+                </p>
+              ))}
+            </div>
+          </div>
+        </Section>
+      ) : null}
+
       {/* DJ players + mixers + all-in-one */}
       {djProducts.length > 0 ? (
         <Section className="border-t border-border">
           <SectionHeading
-            eyebrow="01 — DJ players & mixers"
+            eyebrow={eyebrow("DJ players & mixers")}
             title="Pioneer DJ gear"
             lead="Run a club-spec setup with the same gear used at Boiler Room, R&V and most Christchurch venues."
           />
@@ -181,16 +204,46 @@ export default async function HireServicePage({
         </Section>
       ) : null}
 
+      {/* enquiry-led gear (lighting fixtures, backline riders) */}
+      {service.enquire ? (
+        <Section className="border-t border-border">
+          <SectionHeading
+            eyebrow={eyebrow(service.enquire.eyebrowLabel)}
+            title={service.enquire.title}
+            lead={service.enquire.lead}
+          />
+          <div className="mt-8 flex flex-wrap gap-3">
+            <a
+              href={buildHireMailto({ subject: service.enquire.subject })}
+              className="btn btn-primary"
+            >
+              <Mail className="size-4" aria-hidden /> {service.enquire.subject}
+            </a>
+            <a
+              href={`tel:${HIRE_PHONE_TEL}`}
+              className="btn btn-secondary"
+              aria-label={`Call ${HIRE_PHONE_DISPLAY}`}
+            >
+              <Phone className="size-4" aria-hidden /> {HIRE_PHONE_DISPLAY}
+            </a>
+          </div>
+        </Section>
+      ) : null}
+
       {/* PA section */}
       {paProducts.length > 0 ? (
         <Section className="border-t border-border">
           <SectionHeading
-            eyebrow={wantsDjSection ? "02 — Add a speaker" : "01 — Speakers & subs"}
-            title={wantsDjSection ? "PA for your DJ setup" : "Active PA"}
+            eyebrow={eyebrow(wantsDjSection ? "Add a speaker" : "Speakers & subs")}
+            title={
+              service.paSection?.title ??
+              (wantsDjSection ? "PA for your DJ setup" : "Active PA")
+            }
             lead={
-              wantsDjSection
+              service.paSection?.lead ??
+              (wantsDjSection
                 ? "Active 12-inch tops and 18-inch subs that match the gear above. Add a stand or go Bluetooth."
-                : "Active 12-inch tops and an 18-inch sub. Add a stand or go Bluetooth."
+                : "Active 12-inch tops and an 18-inch sub. Add a stand or go Bluetooth.")
             }
           />
           <div className="mt-10">
@@ -207,9 +260,7 @@ export default async function HireServicePage({
         <Section className="border-t border-border">
           <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
             <SectionHeading
-              eyebrow={
-                wantsDjSection && wantsPaSection ? "03 — Larger systems" : "02 — Larger systems"
-              }
+              eyebrow={eyebrow("Larger systems")}
               title="Festival and full-club rigs"
               lead="For full festival and club-spec sound we run RCF HDL 30 line arrays and TTL6 systems with backline support. Tell us your venue, headcount and any rider notes and we'll quote a tailored package."
             />
@@ -225,32 +276,6 @@ export default async function HireServicePage({
         </Section>
       ) : null}
 
-      {/* lighting placeholder body */}
-      {wantsLighting ? (
-        <Section className="border-t border-border">
-          <SectionHeading
-            eyebrow="01 — Fixtures"
-            title="Inventory list coming soon"
-            lead="Detailed fixture list is being finalised. For now, please get in touch with your event details — venue, dates, rough headcount, and the look you're after — and we'll spec a package."
-          />
-          <div className="mt-8 flex flex-wrap gap-3">
-            <a
-              href={buildHireMailto({ subject: "Lighting hire enquiry" })}
-              className="btn btn-primary"
-            >
-              <Mail className="size-4" aria-hidden /> Lighting enquiry
-            </a>
-            <a
-              href={`tel:${HIRE_PHONE_TEL}`}
-              className="btn btn-secondary"
-              aria-label={`Call ${HIRE_PHONE_DISPLAY}`}
-            >
-              <Phone className="size-4" aria-hidden /> {HIRE_PHONE_DISPLAY}
-            </a>
-          </div>
-        </Section>
-      ) : null}
-
       <ContactStrip
         eyebrow="Book"
         heading="Ready to book?"
@@ -262,22 +287,47 @@ export default async function HireServicePage({
       <Section>
         <SectionHeading eyebrow="FAQ" title="Hire FAQs" />
         <div className="mt-10">
-          <Faq items={HIRE_FAQS} />
+          <Faq items={faqs} />
         </div>
       </Section>
 
-      {/* cross-link */}
+      {/* cross-links */}
       <Section className="border-t border-border">
-        <Link
-          href="/studio"
-          className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-accent"
-        >
-          Looking for the studio? Practice on this gear at Unit 20 Studio
-          <ArrowRight className="size-4" aria-hidden />
-        </Link>
-        <p className="mt-2 font-mono text-meta uppercase tracking-meta text-text-dim">
-          {site.name} · {site.address.locality}
-        </p>
+        <SectionHeading eyebrow="More hire" title="Also in Christchurch" />
+        <ul className="mt-8 flex flex-wrap gap-x-8 gap-y-3">
+          {otherServices.map((s) => (
+            <li key={s.slug}>
+              <Link
+                href={`/hire/${s.slug}`}
+                className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-text-muted hover:text-text"
+              >
+                {s.title}
+                <ArrowRight className="size-4" aria-hidden />
+              </Link>
+            </li>
+          ))}
+          <li>
+            <Link
+              href="/hire"
+              className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-text-muted hover:text-text"
+            >
+              All gear hire
+              <ArrowRight className="size-4" aria-hidden />
+            </Link>
+          </li>
+        </ul>
+        <div className="mt-10 border-t border-border pt-8">
+          <Link
+            href="/studio"
+            className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-accent"
+          >
+            Looking for the studio? Practice on this gear at Unit 20 Studio
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+          <p className="mt-2 font-mono text-meta uppercase tracking-meta text-text-dim">
+            {site.name} · {site.address.locality}
+          </p>
+        </div>
       </Section>
     </>
   );
