@@ -22,24 +22,18 @@ const SPECS = [
   { k: "Hours", v: "07:00 – 24:00, 7 days" },
 ];
 
-// "The booth" is the real Unit 20 photo (public/theroom.webp). "Monitoring"
-// and "The couch" are still Unsplash holding shots — swap those when the rest
-// of the shoot lands.
 const SHOTS = [
   {
     label: "The booth",
     src: "/theroom.webp",
     alt: "Unit 20 booth: four Pioneer CDJ-3000s linked to a DJM-A9 mixer on a black desk",
+    contain: false,
   },
   {
-    label: "Monitoring",
-    src: "https://images.unsplash.com/photo-1571266028243-d220c6a82332?auto=format&fit=crop&w=1200&q=80",
-    alt: "Close-up of a Pioneer CDJ player",
-  },
-  {
-    label: "The couch",
-    src: "https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80",
-    alt: "Moody low-lit interior with warm tones",
+    label: "Monitoring · QSC K12.2",
+    src: "/hire/qsc-k12-2.png",
+    alt: "QSC K12.2 powered loudspeaker — the monitoring in the Unit 20 booth",
+    contain: true,
   },
 ];
 
@@ -61,20 +55,23 @@ export default function TheRoomPage() {
           lead="One purpose-built booth in the central city. Low light, treated walls, real flagship gear set up exactly as you'd meet it on a Friday. Practice should feel like the gig — so it does."
         />
 
-        <div className="mt-12 grid gap-4 sm:grid-cols-3">
+        <div className="mt-12 grid gap-4 sm:grid-cols-[1.4fr_1fr]">
           {SHOTS.map((s, i) => (
             <figure
               key={s.label}
-              className="relative aspect-[4/5] overflow-hidden border border-border bg-bg-elev"
+              className={`relative aspect-[4/5] overflow-hidden border border-border bg-bg-elev sm:aspect-auto sm:min-h-[28rem] ${
+                s.contain
+                  ? "bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.04),transparent_70%)]"
+                  : ""
+              }`}
             >
-              {/* TODO: real photo — replace src with a /public asset */}
               <Image
                 src={s.src}
                 alt={s.alt}
                 fill
                 priority={i === 0}
-                sizes="(min-width: 640px) 33vw, 100vw"
-                className="object-cover"
+                sizes={i === 0 ? "(min-width: 640px) 58vw, 100vw" : "(min-width: 640px) 42vw, 100vw"}
+                className={s.contain ? "object-contain p-8 pb-14" : "object-cover"}
               />
               <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-bg/80 to-transparent" aria-hidden />
               <figcaption className="absolute bottom-4 left-4 font-mono text-meta uppercase tracking-meta text-text">
