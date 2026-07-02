@@ -23,7 +23,7 @@ export default function BookingReceivedNewCustomer({
       <EmailText>
         Thanks, {firstName}. Since this is your first session, we just need to
         check your ID before it&apos;s fully confirmed — bring photo ID (driver
-        licence, passport or 18+ card) when you arrive and you&apos;re set.
+        licence, passport or similar) when you arrive and you&apos;re set.
         We&apos;ll be in touch shortly to lock it in.
       </EmailText>
 

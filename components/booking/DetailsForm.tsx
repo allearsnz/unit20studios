@@ -83,7 +83,7 @@ export function DetailsForm({
         />
       </Field>
 
-      <Field label="Date of birth" htmlFor="dob" hint="18+ only" error={errors.dob?.message}>
+      <Field label="Date of birth" htmlFor="dob" hint="16+ only" error={errors.dob?.message}>
         <input
           id="dob"
           type="date"

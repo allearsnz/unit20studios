@@ -11,7 +11,7 @@ const SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "What we collect",
     body: [
-      "When you book the studio: your name, email, phone, date of birth (to confirm you're 18+), and any note you add. We record your booking details and whether your ID has been verified.",
+      "When you book the studio: your name, email, phone, date of birth (to confirm you're 16+), and any note you add. We record your booking details and whether your ID has been verified.",
       "When you contact us: your name, email, optional phone, and your message.",
       "When you browse: anonymous, aggregate usage data via privacy-friendly analytics, and standard advertising/measurement signals if you've consented to them.",
     ],

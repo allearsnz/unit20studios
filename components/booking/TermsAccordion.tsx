@@ -47,7 +47,7 @@ export function TermsAccordion({
           className="mt-0.5 h-5 w-5 shrink-0 accent-accent"
         />
         <span className="text-sm text-text">
-          I&apos;ve read and agree to the studio terms, and I&apos;m 18 or over.
+          I&apos;ve read and agree to the studio terms, and I&apos;m 16 or over.
         </span>
       </label>
       {error ? (

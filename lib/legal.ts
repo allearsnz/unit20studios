@@ -8,7 +8,7 @@ export const STUDIO_TERMS: { title: string; body: string }[] = [
   },
   {
     title: "First booking & ID",
-    body: "You must be 18 or over to book. Your first session needs a quick ID check on arrival (driver licence, passport or 18+ card). Once you're verified, future bookings confirm instantly.",
+    body: "You must be 16 or over to book. Your first session needs a quick photo ID check on arrival (driver licence, passport or similar) — it's about knowing who's using the gear, not your age. Once you're verified, future bookings confirm instantly.",
   },
   {
     title: "Cancellations & changes",
@@ -29,7 +29,7 @@ export const STUDIO_TERMS: { title: string; body: string }[] = [
 ];
 
 export const HOUSE_RULES: string[] = [
-  "18+ only. ID on your first visit.",
+  "16+ only. Photo ID on your first visit.",
   "No smoking or vaping inside.",
   "Keep drinks away from the decks.",
   "Bring your own USBs and headphones.",

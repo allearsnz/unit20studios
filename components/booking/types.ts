@@ -26,7 +26,7 @@ export const detailsSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Add your date of birth")
     .refine((v) => !Number.isNaN(Date.parse(v)), "Not a real date")
-    .refine((v) => ageFromDob(v) >= 18, "You must be 18 or over to book"),
+    .refine((v) => ageFromDob(v) >= 16, "You must be 16 or over to book"),
   customerNote: z.string().max(1000).optional(),
 });
 

@@ -50,7 +50,7 @@ export const bookingInputSchema = z.object({
     .min(6, "Add a phone number")
     .max(20)
     .refine((v) => normalizeNZPhone(v) !== null, "Use a valid NZ or international number"),
-  dob: isoDate.refine((v) => ageFromDob(v) >= 18, "You must be 18 or over to book"),
+  dob: isoDate.refine((v) => ageFromDob(v) >= 16, "You must be 16 or over to book"),
   customerNote: z.string().max(1000).optional().nullable(),
   agreeTerms: z.literal(true, { message: "Please accept the terms to book" }),
   marketingOptIn: z.boolean().default(false),
