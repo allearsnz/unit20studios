@@ -1,5 +1,10 @@
 # Xero integration — deferred (manual invoicing for now)
 
+> **Superseded:** the full design for switching this on — auto-invoicing on approval,
+> pay-now links, approve-from-email, webhook-driven confirmation — is in
+> **[`docs/PLAN-xero-invoicing.md`](docs/PLAN-xero-invoicing.md)**. The notes below describe
+> the current (manual) interim state only.
+
 **Status:** Code is in the repo but **not active in production**. For now, invoices are
 created **manually** in Xero from each booking's details. Leave the integration as-is until
 we're ready to switch it on.
