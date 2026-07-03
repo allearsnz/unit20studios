@@ -1,0 +1,82 @@
+<!-- Unit 20 — Supabase Auth "Magic Link" template (sign-in CODE).
+     Paste the whole file into: Supabase Dashboard → Authentication →
+     Email Templates → Magic Link → Save. See docs/EMAIL-SETUP.md.
+     Self-contained: inline styles only, no external images or fonts.
+     PP Supply Mono is referenced by name only (never embedded) and
+     degrades to a system mono where it isn't installed. -->
+<html>
+  <body style="margin:0;padding:0;background-color:#0a0a0a;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0a0a0a" style="background-color:#0a0a0a;">
+      <tr>
+        <td align="center" style="padding:40px 24px 48px;">
+          <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px;width:100%;">
+            <!-- Masthead -->
+            <tr>
+              <td style="vertical-align:baseline;font-family:'PP Supply Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:20px;font-weight:700;letter-spacing:0.04em;color:#f5f1ea;">
+                unit<span style="color:#3ddc97;">/</span>20
+              </td>
+              <td align="right" style="vertical-align:baseline;font-family:'PP Supply Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.2em;color:#5c5856;">
+                Christchurch&nbsp;&middot;&nbsp;NZ
+              </td>
+            </tr>
+            <!-- Rule: accent tick + hairline -->
+            <tr>
+              <td colspan="2" style="padding:18px 0 36px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td width="28" height="2" bgcolor="#3ddc97" style="height:2px;font-size:0;line-height:0;">&nbsp;</td>
+                    <td height="2" bgcolor="#262624" style="height:2px;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Content -->
+            <tr>
+              <td colspan="2">
+                <p style="font-family:'PP Supply Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;line-height:1.4;text-transform:uppercase;letter-spacing:0.18em;color:#3ddc97;margin:0 0 12px;">
+                  Admin / Sign in
+                </p>
+                <p style="font-family:'PP Supply Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:27px;line-height:1.2;font-weight:700;letter-spacing:-0.01em;color:#f5f1ea;margin:0 0 18px;">
+                  Your sign-in code.
+                </p>
+                <p style="font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:15px;line-height:1.65;color:#8a8580;margin:0 0 24px;">
+                  Enter this code on the sign-in screen to get into the Unit 20 studio admin. It only works once and expires shortly.
+                </p>
+                <!-- Code panel -->
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px;">
+                  <tr>
+                    <td align="center" bgcolor="#141414" style="background-color:#141414;border:1px solid #262624;border-top:2px solid #3ddc97;padding:28px 20px;">
+                      <span style="font-family:'PP Supply Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:36px;line-height:1.2;font-weight:700;letter-spacing:0.3em;color:#3ddc97;">{{ .Token }}</span>
+                    </td>
+                  </tr>
+                </table>
+                <p style="font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.65;color:#8a8580;margin:0 0 8px;">
+                  Or use this link:
+                  <a href="{{ .ConfirmationURL }}" style="color:#8a8580;text-decoration:underline;word-break:break-all;">{{ .ConfirmationURL }}</a>
+                </p>
+                <p style="font-family:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:1.65;color:#5c5856;margin:0;">
+                  Didn&rsquo;t try to sign in? You can safely ignore this email.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td colspan="2" style="padding-top:44px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td height="1" bgcolor="#262624" style="height:1px;font-size:0;line-height:0;">&nbsp;</td>
+                  </tr>
+                </table>
+                <p style="font-family:'PP Supply Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;font-size:11px;line-height:1.9;color:#8a8580;margin:16px 0 0;">
+                  unit/20 &mdash; 20 Southwark Street, Christchurch Central 8011<br />
+                  <a href="https://unit20.nz" style="color:#8a8580;text-decoration:underline;">unit20.nz</a>&nbsp;&middot;&nbsp;<a href="mailto:studio@unit20.nz" style="color:#8a8580;text-decoration:underline;">studio@unit20.nz</a>&nbsp;&middot;&nbsp;<a href="https://instagram.com/unit20.nz" style="color:#8a8580;text-decoration:underline;">@unit20.nz</a><br />
+                  <span style="color:#5c5856;">-43.5365, 172.6336 &middot; DJ practice studio &middot; gear hire &middot; venue</span>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

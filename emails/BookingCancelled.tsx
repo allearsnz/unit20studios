@@ -20,7 +20,10 @@ export default function BookingCancelled({
   bookUrl = "https://unit20.nz/studio/book",
 }: BookingCancelledProps) {
   return (
-    <EmailLayout preview={`Your booking ${friendlyId} has been cancelled`}>
+    <EmailLayout
+      preview={`Your booking ${friendlyId} has been cancelled`}
+      eyebrow={`Booking / Cancelled / ${friendlyId}`}
+    >
       <EmailHeading>Booking cancelled.</EmailHeading>
       <EmailText>
         Hi {firstName}, we&apos;ve cancelled the session below. If this

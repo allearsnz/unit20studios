@@ -3,6 +3,7 @@ import {
   EmailHeading,
   EmailLayout,
   EmailText,
+  InfoBlock,
 } from "./components/EmailLayout";
 
 export type ContactEmailProps = {
@@ -23,7 +24,10 @@ export default function ContactForm({
   sourcePage,
 }: ContactEmailProps) {
   return (
-    <EmailLayout preview={`Contact — ${subject} — ${name}`}>
+    <EmailLayout
+      preview={`Contact — ${subject} — ${name}`}
+      eyebrow="Website / Enquiry"
+    >
       <EmailHeading>New enquiry</EmailHeading>
       <EmailText>Someone got in touch via the website.</EmailText>
 
@@ -37,7 +41,7 @@ export default function ContactForm({
         ]}
       />
 
-      <EmailText>{message}</EmailText>
+      <InfoBlock label="Message">{message}</InfoBlock>
     </EmailLayout>
   );
 }

@@ -4,6 +4,7 @@ import {
   EmailHeading,
   EmailLayout,
   EmailText,
+  c,
 } from "./components/EmailLayout";
 
 export type BookingReminderProps = {
@@ -20,13 +21,16 @@ export default function BookingReminder({
   manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
 }: BookingReminderProps) {
   return (
-    <EmailLayout preview={`Your session is coming up — ${friendlyId}`}>
+    <EmailLayout
+      preview={`Your session is coming up — ${friendlyId}`}
+      eyebrow={`Reminder / 24 hours out / ${friendlyId}`}
+    >
       <EmailHeading>See you soon.</EmailHeading>
       <EmailText>
         Quick reminder, {firstName} — your Unit 20 session is about 24 hours
-        away. Bring a USB or two with your tracks, your own headphones, and photo
-        ID if it&apos;s your first visit. Buzz the roller door on Southwark Street
-        when you arrive.
+        away. Bring a USB or two with your tracks, your own headphones, and
+        photo ID if it&apos;s your first visit. Buzz the roller door on
+        Southwark Street when you arrive.
       </EmailText>
 
       <DetailPanel
@@ -39,7 +43,8 @@ export default function BookingReminder({
 
       <EmailText>
         Need to move or cancel? Give us a heads-up at least 24 hours out — reply
-        to this email or write to studio@unit20.nz.
+        to this email or write to{" "}
+        <span style={{ color: c.text }}>studio@unit20.nz</span>.
       </EmailText>
 
       <EmailButton href={manageUrl}>View booking</EmailButton>

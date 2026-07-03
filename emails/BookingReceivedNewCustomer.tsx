@@ -4,6 +4,7 @@ import {
   EmailHeading,
   EmailLayout,
   EmailText,
+  InfoBlock,
 } from "./components/EmailLayout";
 import type { BookingEmailProps } from "./BookingConfirmed";
 
@@ -21,7 +22,10 @@ export default function BookingReceivedNewCustomer({
   packNote = null,
 }: BookingEmailProps) {
   return (
-    <EmailLayout preview={`We've got your booking request — ${friendlyId}`}>
+    <EmailLayout
+      preview={`We've got your booking request — ${friendlyId}`}
+      eyebrow={`Booking / Received / ${friendlyId}`}
+    >
       <EmailHeading>We&apos;ve got your request.</EmailHeading>
       <EmailText>
         Thanks, {firstName}. Since this is your first session, we just need to
@@ -45,11 +49,11 @@ export default function BookingReceivedNewCustomer({
 
       {packNote ? <EmailText>{packNote}</EmailText> : null}
 
-      <EmailText>
-        Hold tight — you don&apos;t need to do anything else right now. We review
-        new bookings quickly and you&apos;ll get a confirmation once you&apos;re
-        verified. Questions? Just reply to this email.
-      </EmailText>
+      <InfoBlock label="What happens next">
+        Hold tight — you don&apos;t need to do anything else right now. We
+        review new bookings quickly and you&apos;ll get a confirmation once
+        you&apos;re verified. Questions? Just reply to this email.
+      </InfoBlock>
 
       <EmailButton href={manageUrl}>View request</EmailButton>
     </EmailLayout>

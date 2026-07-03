@@ -4,6 +4,8 @@ import {
   EmailHeading,
   EmailLayout,
   EmailText,
+  InfoBlock,
+  c,
 } from "./components/EmailLayout";
 import { site } from "@/lib/site";
 
@@ -40,7 +42,10 @@ export default function BookingConfirmed({
   packNote = null,
 }: BookingEmailProps) {
   return (
-    <EmailLayout preview={`You're booked — ${friendlyId}`}>
+    <EmailLayout
+      preview={`You're booked — ${friendlyId}`}
+      eyebrow={`Booking / Confirmed / ${friendlyId}`}
+    >
       <EmailHeading>You&apos;re booked.</EmailHeading>
       <EmailText>
         Nice one, {firstName}. Your session at Unit 20 is locked in. We&apos;ve
@@ -62,17 +67,17 @@ export default function BookingConfirmed({
 
       {packNote ? <EmailText>{packNote}</EmailText> : null}
 
-      <EmailText>
-        <strong style={{ color: "#f5f1ea" }}>Getting in</strong>
-        <br />
+      <InfoBlock label="Getting in">
         Come to {ADDRESS} at your booking time — someone from Unit 20 will meet
-        you there and let you in, so there&apos;s nothing to sort out beforehand.
-      </EmailText>
+        you there and let you in, so there&apos;s nothing to sort out
+        beforehand.
+      </InfoBlock>
 
       <EmailText>
         Turn up a couple of minutes early. Bring a USB or two with your tracks,
         your own headphones, and photo ID if it&apos;s your first visit. Need to
-        move it? Reply to this email or write to studio@unit20.nz.
+        move it? Reply to this email or write to{" "}
+        <span style={{ color: c.text }}>studio@unit20.nz</span>.
       </EmailText>
 
       <EmailButton href={manageUrl}>View booking</EmailButton>
