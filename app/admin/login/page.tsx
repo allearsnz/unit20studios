@@ -96,7 +96,7 @@ export default function AdminLoginPage() {
         {step === "email" ? (
           <form onSubmit={sendCode}>
             <h1 className="h2 text-text">Sign in</h1>
-            <p className="lead mt-2 text-sm">Staff access only. We&rsquo;ll email you a 6-digit code.</p>
+            <p className="lead mt-2 text-sm">Staff access only. We&rsquo;ll email you a sign-in code.</p>
 
             <div className="mt-8">
               <label htmlFor="email" className="font-mono text-meta uppercase tracking-meta text-text-muted">
@@ -122,12 +122,12 @@ export default function AdminLoginPage() {
           <form onSubmit={verify}>
             <h1 className="h2 text-text">Enter your code</h1>
             <p className="lead mt-2 text-sm">
-              We emailed a 6-digit code to <span className="text-text">{email}</span>. Enter it below.
+              We emailed a sign-in code to <span className="text-text">{email}</span>. Enter it below.
             </p>
 
             <div className="mt-8">
               <label htmlFor="code" className="font-mono text-meta uppercase tracking-meta text-text-muted">
-                6-digit code
+                Sign-in code
               </label>
               <input
                 id="code"
@@ -135,7 +135,7 @@ export default function AdminLoginPage() {
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 autoFocus
-                maxLength={6}
+                maxLength={10}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                 className="input mt-2 tracking-[0.4em]"
