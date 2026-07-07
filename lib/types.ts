@@ -10,6 +10,18 @@ export type BookingStatus =
 export type PaymentStatus = "unpaid" | "paid" | "refunded" | "comped";
 export type PaymentMethod = "in_person" | "stripe";
 
+/**
+ * Xero invoicing state machine (independent of booking `status` /
+ * `payment_status`). `creating` is the transient claim used to make invoice
+ * creation exactly-once. See supabase migration 0009 (crew 0057).
+ */
+export type InvoiceStatus =
+  | "not_invoiced"
+  | "creating"
+  | "authorised"
+  | "paid"
+  | "voided";
+
 export interface PricingTier {
   id: string;
   slug: "small";
@@ -57,6 +69,12 @@ export interface Booking {
   reminder_sent_at: string | null;
   post_session_sent_at: string | null;
   access_sent_at: string | null;
+  // Xero invoicing (supabase migration 0009 / crew 0057).
+  xero_invoice_id: string | null;
+  online_invoice_url: string | null;
+  invoice_status: InvoiceStatus;
+  invoiced_at: string | null;
+  paid_at: string | null;
   created_at: string;
   updated_at: string;
 }

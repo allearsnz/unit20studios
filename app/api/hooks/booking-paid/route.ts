@@ -1,6 +1,28 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { sendAccessInstructions } from "@/lib/notifications";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Booking } from "@/lib/types";
+
+/**
+ * Mint + email the studio door code the moment payment lands. The crew-side DB
+ * trigger (crew migration 0050) already INSERTs a *pending* studio_door_codes
+ * row on payment_status → paid; this kicks the `issue-studio-door-code` edge
+ * function to mint it against TTLock and email the customer their code now,
+ * rather than waiting for the per-minute cron. Best-effort: never throws, so it
+ * can't break the access-instructions send or the webhook that triggered us.
+ */
+async function issuePendingDoorCode(): Promise<void> {
+  try {
+    const supabase = createAdminClient();
+    // Service-role JWT satisfies the function's verify_jwt; process_pending
+    // mints every pending row (including the one just enqueued for this booking).
+    await supabase.functions.invoke("issue-studio-door-code", {
+      body: { process_pending: true },
+    });
+  } catch (e) {
+    console.error("[hooks/booking-paid] door-code mint failed", e);
+  }
+}
 
 /**
  * Supabase Database Webhook target — fires on `bookings` UPDATE.
@@ -50,6 +72,10 @@ export async function POST(req: NextRequest) {
   if (!record?.id || !isPaidNow || wasPaidBefore) {
     return NextResponse.json({ ok: true, skipped: true });
   }
+
+  // Door code goes out ON PAYMENT (not on approval): mint the pending code now.
+  // Best-effort and independent of the access email.
+  await issuePendingDoorCode();
 
   try {
     const result = await sendAccessInstructions(record.id);

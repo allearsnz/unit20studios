@@ -9,11 +9,15 @@ export async function GET(req: NextRequest) {
     const supabase = createAdminClient();
     const cutoff = new Date(Date.now() - 72 * 3600 * 1000).toISOString();
 
+    // Never delete a booking that has (or is having) a Xero invoice raised —
+    // its invoice lives on in Xero and may still get paid. Only sweep bookings
+    // that were never invoiced (invoice_status null or 'not_invoiced').
     const { data, error } = await supabase
       .from("bookings")
       .delete()
       .eq("status", "pending_verification")
       .lt("created_at", cutoff)
+      .or("invoice_status.is.null,invoice_status.eq.not_invoiced")
       .select("id");
 
     if (error) throw error;

@@ -10,6 +10,7 @@ import { buildBookingIcs } from "@/lib/ics";
 import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
 import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
+import { invoiceBooking } from "@/lib/xero-booking";
 import { site } from "@/lib/site";
 import BookingConfirmed from "@/emails/BookingConfirmed";
 import BookingReceivedNewCustomer from "@/emails/BookingReceivedNewCustomer";
@@ -69,9 +70,10 @@ export async function setBookingStatus(id: string, status: BookingStatus) {
           attachments: ics ? [icsAttachment(`unit20-${booking.friendly_id}.ics`, ics)] : undefined,
         });
       }
-      // Approving a booking issues the customer a self-entry door code for
-      // their booked window (best-effort; also covered by the paid trigger).
-      if (booking) await enqueueDoorCode(supabase, booking);
+      // Approving a booking raises its Xero invoice and has Xero email the
+      // customer the pay-now link (best-effort; never throws). The door code is
+      // NOT issued here — it now mints when payment lands (see the paid hook).
+      await invoiceBooking(id);
     } else {
       await supabase.from("bookings").update({ status }).eq("id", id);
     }
@@ -153,42 +155,17 @@ export async function resendConfirmation(id: string) {
   }
 }
 
-type AdminClient = ReturnType<typeof createAdminClient>;
-
 /**
- * Issue a self-entry door code for a booking's window. Enqueues a pending row
- * in the crew-shared `studio_door_codes` table (deduped against any existing
- * pending/active code — the paid trigger may have queued one already) and kicks
- * the `issue-studio-door-code` edge function to mint it via TTLock and email the
- * customer their code. Best-effort: never throws, so it can't break approval —
- * a per-minute cron re-processes any pending rows if this call fails.
+ * Manually (re)create the Xero invoice for a booking — for already-confirmed
+ * unpaid bookings, or to retry after a transient Xero failure. Best-effort:
+ * `invoiceBooking` never throws and no-ops if the booking is already invoiced.
  */
-async function enqueueDoorCode(
-  supabase: AdminClient,
-  booking: { id: string; start_time: string; end_time: string | null },
-): Promise<void> {
-  try {
-    if (!booking.end_time || new Date(booking.end_time).getTime() <= Date.now()) return;
-    const { data: existing } = await supabase
-      .from("studio_door_codes")
-      .select("id")
-      .eq("booking_id", booking.id)
-      .in("status", ["pending", "active"])
-      .maybeSingle();
-    if (existing) return; // already has a live code — don't double-issue
-    await supabase.from("studio_door_codes").insert({
-      booking_id: booking.id,
-      valid_from: booking.start_time,
-      valid_to: booking.end_time,
-      status: "pending",
-    });
-    // Mint + email now (service-role JWT satisfies the function's verify_jwt).
-    await supabase.functions.invoke("issue-studio-door-code", {
-      body: { process_pending: true },
-    });
-  } catch (e) {
-    console.error("[door-code] approval enqueue failed:", e);
-  }
+export async function createInvoiceForBooking(id: string) {
+  await assertAdmin();
+  const result = await invoiceBooking(id);
+  revalidatePath(`/admin/bookings/${id}`);
+  revalidatePath("/admin");
+  return result;
 }
 
 /** "HH:MM" → minutes from midnight, or null if malformed. */

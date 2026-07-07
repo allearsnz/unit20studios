@@ -42,8 +42,8 @@ export default function BookingAccessInstructions({
 
       <InfoBlock label="Getting in">
         Come to {ADDRESS}, {site.address.region} at your booking time. Let
-        yourself in with the door code we emailed you when your booking was
-        approved — enter it on the keypad by the door, followed by the{" "}
+        yourself in with the door code we emailed you — enter it on the keypad
+        by the door, followed by the{" "}
         <span style={{ color: c.text }}>#</span> key. The code only works during
         your booked window. Can&apos;t find it? Just reply and we&apos;ll resend.
       </InfoBlock>

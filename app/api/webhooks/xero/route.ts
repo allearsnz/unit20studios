@@ -62,33 +62,49 @@ export async function POST(req: NextRequest) {
       if (invoice.Type && invoice.Type !== "ACCREC") continue;
       if (!isInvoiceFullyPaid(invoice)) continue;
 
-      const reference = invoice.Reference?.trim();
-      if (!reference) {
-        console.warn(`[webhooks/xero] paid invoice ${invoice.InvoiceID} has no Reference`);
-        continue;
-      }
+      // Match the booking. Primary: the invoice we raised stored its InvoiceID
+      // on the booking (xero_invoice_id == resourceId). Fallback: an invoice
+      // raised by hand in Xero with the booking friendly_id as its Reference —
+      // keeps manual invoicing working.
+      let booking: { id: string; payment_status: string } | null = null;
 
-      // Match by booking friendly_id (the invoice Reference). Only flip unpaid
-      // bookings so this is idempotent across webhook redeliveries.
-      const { data: booking } = await supabase
+      const { data: byId } = await supabase
         .from("bookings")
         .select("id, payment_status")
-        .eq("friendly_id", reference)
+        .eq("xero_invoice_id", invoice.InvoiceID)
         .maybeSingle();
+      booking = byId ?? null;
+
+      const reference = invoice.Reference?.trim();
+      if (!booking && reference) {
+        const { data: byRef } = await supabase
+          .from("bookings")
+          .select("id, payment_status")
+          .eq("friendly_id", reference)
+          .maybeSingle();
+        booking = byRef ?? null;
+      }
 
       if (!booking) {
-        console.warn(`[webhooks/xero] no booking for Reference "${reference}" (invoice ${invoice.InvoiceID})`);
+        console.warn(
+          `[webhooks/xero] no booking for invoice ${invoice.InvoiceID} (Reference "${reference ?? ""}")`,
+        );
         continue;
       }
       if (booking.payment_status === "paid") continue;
 
+      // Only flip unpaid bookings so this is idempotent across redeliveries.
       const { error } = await supabase
         .from("bookings")
-        .update({ payment_status: "paid" })
+        .update({
+          payment_status: "paid",
+          invoice_status: "paid",
+          paid_at: new Date().toISOString(),
+        })
         .eq("id", booking.id)
         .neq("payment_status", "paid");
       if (error) {
-        console.error(`[webhooks/xero] failed to mark ${reference} paid`, error);
+        console.error(`[webhooks/xero] failed to mark invoice ${invoice.InvoiceID} paid`, error);
       }
     } catch (e) {
       // Never fail the whole webhook for one event — Xero would retry the batch.
