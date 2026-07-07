@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarOff, LayoutList, Users, Zap } from "lucide-react";
+import { CalendarClock, CalendarOff, LayoutList, Users, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { label: "Customers", href: "/admin/customers", icon: Users },
   { label: "Blackouts", href: "/admin/blackouts", icon: CalendarOff },
   { label: "Quick book", href: "/admin/quick-book", icon: Zap },
+  { label: "Calendar", href: "/admin/calendar", icon: CalendarClock },
 ];
 
 export function AdminNav() {
