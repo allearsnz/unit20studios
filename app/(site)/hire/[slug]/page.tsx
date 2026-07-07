@@ -169,6 +169,9 @@ export default async function HireServicePage({
             <Phone className="size-4" aria-hidden /> Call {HIRE_PHONE_DISPLAY}
           </a>
         </div>
+        <p className="mt-4 text-sm text-text-muted text-pretty">
+          Tell us the gear and your dates and we&apos;ll sort it.
+        </p>
       </Section>
 
       {/* per-service intro copy — keeps each landing page distinct */}

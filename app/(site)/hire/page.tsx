@@ -107,6 +107,9 @@ export default function HirePage() {
             <Phone className="size-4" aria-hidden /> Call {HIRE_PHONE_DISPLAY}
           </a>
         </div>
+        <p className="mt-4 text-sm text-text-muted text-pretty">
+          Tell us the gear and your dates and we&apos;ll sort it.
+        </p>
 
         {/* in-page nav */}
         <nav
