@@ -69,6 +69,9 @@ export async function setBookingStatus(id: string, status: BookingStatus) {
           attachments: ics ? [icsAttachment(`unit20-${booking.friendly_id}.ics`, ics)] : undefined,
         });
       }
+      // Approving a booking issues the customer a self-entry door code for
+      // their booked window (best-effort; also covered by the paid trigger).
+      if (booking) await enqueueDoorCode(supabase, booking);
     } else {
       await supabase.from("bookings").update({ status }).eq("id", id);
     }
@@ -148,6 +151,84 @@ export async function resendConfirmation(id: string) {
       react: createElement(BookingReceivedNewCustomer, props),
     });
   }
+}
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+/**
+ * Issue a self-entry door code for a booking's window. Enqueues a pending row
+ * in the crew-shared `studio_door_codes` table (deduped against any existing
+ * pending/active code — the paid trigger may have queued one already) and kicks
+ * the `issue-studio-door-code` edge function to mint it via TTLock and email the
+ * customer their code. Best-effort: never throws, so it can't break approval —
+ * a per-minute cron re-processes any pending rows if this call fails.
+ */
+async function enqueueDoorCode(
+  supabase: AdminClient,
+  booking: { id: string; start_time: string; end_time: string | null },
+): Promise<void> {
+  try {
+    if (!booking.end_time || new Date(booking.end_time).getTime() <= Date.now()) return;
+    const { data: existing } = await supabase
+      .from("studio_door_codes")
+      .select("id")
+      .eq("booking_id", booking.id)
+      .in("status", ["pending", "active"])
+      .maybeSingle();
+    if (existing) return; // already has a live code — don't double-issue
+    await supabase.from("studio_door_codes").insert({
+      booking_id: booking.id,
+      valid_from: booking.start_time,
+      valid_to: booking.end_time,
+      status: "pending",
+    });
+    // Mint + email now (service-role JWT satisfies the function's verify_jwt).
+    await supabase.functions.invoke("issue-studio-door-code", {
+      body: { process_pending: true },
+    });
+  } catch (e) {
+    console.error("[door-code] approval enqueue failed:", e);
+  }
+}
+
+/** "HH:MM" → minutes from midnight, or null if malformed. */
+function hhmmToMinutes(value: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h < 0 || h > 24 || min < 0 || min > 59) return null;
+  const total = h * 60 + min;
+  return total >= 0 && total <= 1440 ? total : null;
+}
+
+export async function createRecurringBlackout(formData: FormData) {
+  await assertAdmin();
+  const days = formData
+    .getAll("day")
+    .map((d) => Number(d))
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
+  const startMin = hhmmToMinutes(String(formData.get("start_time") ?? ""));
+  const endMin = hhmmToMinutes(String(formData.get("end_time") ?? ""));
+  const reason = String(formData.get("reason") ?? "").trim() || null;
+  if (days.length === 0 || startMin == null || endMin == null || endMin <= startMin) return;
+
+  const supabase = createAdminClient();
+  await supabase.from("recurring_blackouts").insert({
+    days_of_week: [...new Set(days)],
+    start_minute: startMin,
+    end_minute: endMin,
+    reason,
+    active: true,
+  });
+  revalidatePath("/admin/blackouts");
+}
+
+export async function deleteRecurringBlackout(id: string) {
+  await assertAdmin();
+  const supabase = createAdminClient();
+  await supabase.from("recurring_blackouts").delete().eq("id", id);
+  revalidatePath("/admin/blackouts");
 }
 
 export async function createBlackout(formData: FormData) {

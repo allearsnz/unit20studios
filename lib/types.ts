@@ -69,6 +69,19 @@ export interface BlackoutPeriod {
   created_at: string;
 }
 
+/** A recurring (permanent) weekly blackout rule — e.g. weekdays 10:00–15:00. */
+export interface RecurringBlackout {
+  id: string;
+  /** NZ-local weekdays: 0=Sun … 6=Sat (matches JS getDay). */
+  days_of_week: number[];
+  /** Local-time window, minutes from NZ midnight (600 = 10:00). */
+  start_minute: number;
+  end_minute: number;
+  reason: string | null;
+  active: boolean;
+  created_at: string;
+}
+
 export interface ContactSubmission {
   id: string;
   name: string;
