@@ -235,7 +235,9 @@ export type InvoiceBooking = {
   friendly_id: string;
   duration_hours: number;
   group_size: number;
-  total_price_cents: number;
+  total_price_cents: number; // NET of any discount
+  /** Ex-GST discount applied (0 when none). Shown as a negative invoice line. */
+  discount_amount_cents?: number;
   start_time: string;
   end_time: string | null;
 };
@@ -262,8 +264,13 @@ export async function createBookingInvoice(
   const accountCode = process.env.XERO_ACCOUNT_CODE;
   if (!accountCode) throw new Error("XERO_ACCOUNT_CODE not configured");
 
+  // `total_price_cents` is net of any discount. Rebuild the GROSS subtotal so the
+  // base/surcharge lines show the pre-discount figures and the discount appears
+  // as its own negative line; the invoice still totals the net amount.
+  const discountCents = booking.discount_amount_cents ?? 0;
+  const grossTotal = booking.total_price_cents + discountCents;
   const surchargeCents = groupSurchargeCents(booking.duration_hours, booking.group_size);
-  const baseCents = booking.total_price_cents - surchargeCents;
+  const baseCents = grossTotal - surchargeCents;
   const isPack = baseCents === BULK_PACK.totalCents;
 
   const lineItems: Record<string, unknown>[] = [
@@ -282,6 +289,15 @@ export async function createBookingInvoice(
       Description: `Group surcharge (${booking.group_size} people)`,
       Quantity: 1,
       UnitAmount: (surchargeCents / 100).toFixed(2),
+      AccountCode: accountCode,
+      TaxType: GST_TAX_TYPE,
+    });
+  }
+  if (discountCents > 0) {
+    lineItems.push({
+      Description: "Discount code",
+      Quantity: 1,
+      UnitAmount: (-discountCents / 100).toFixed(2),
       AccountCode: accountCode,
       TaxType: GST_TAX_TYPE,
     });

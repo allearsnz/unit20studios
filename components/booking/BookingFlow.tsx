@@ -12,6 +12,7 @@ import { GroupSize } from "./GroupSize";
 import { DetailsForm } from "./DetailsForm";
 import { TermsAccordion } from "./TermsAccordion";
 import { BookingSummary } from "./BookingSummary";
+import { DiscountField, type DiscountState } from "./DiscountField";
 import { detailsSchema, type DetailsValues, type Slot } from "./types";
 import {
   BULK_PACK,
@@ -88,6 +89,9 @@ export function BookingFlow() {
   const [groupSize, setGroupSize] = useState(1);
   const [agree, setAgree] = useState(false);
   const [marketing, setMarketing] = useState(false);
+  const [discountCode, setDiscountCode] = useState("");
+  const [discountState, setDiscountState] = useState<DiscountState>("idle");
+  const [discountPercent, setDiscountPercent] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [agreeError, setAgreeError] = useState<string | undefined>();
@@ -119,6 +123,49 @@ export function BookingFlow() {
     };
   }, [date, refreshKey]);
 
+  // Auto-fill the discount code from the ?code= link (from the offer email).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const fromUrl = new URLSearchParams(window.location.search).get("code");
+    if (fromUrl) setDiscountCode(fromUrl.trim().toUpperCase());
+  }, []);
+
+  // Live-validate the code (debounced). Purely UX — the server re-checks on submit.
+  useEffect(() => {
+    const code = discountCode.trim();
+    if (!code) {
+      setDiscountState("idle");
+      setDiscountPercent(null);
+      return;
+    }
+    setDiscountState("checking");
+    let cancelled = false;
+    const t = setTimeout(() => {
+      fetch(`/api/discounts/validate?code=${encodeURIComponent(code)}`)
+        .then((r) => r.json())
+        .then((d: { valid?: boolean; percent?: number }) => {
+          if (cancelled) return;
+          if (d.valid && d.percent) {
+            setDiscountState("valid");
+            setDiscountPercent(d.percent);
+          } else {
+            setDiscountState("invalid");
+            setDiscountPercent(null);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setDiscountState("invalid");
+            setDiscountPercent(null);
+          }
+        });
+    }, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [discountCode]);
+
   const tier = FLAT_TIER;
   const selectedOption = option ? bookingOption(option) : null;
   const duration = selectedOption?.durationHours ?? 0;
@@ -135,8 +182,16 @@ export function BookingFlow() {
       })
     : null;
   const totalLabel = price ? formatNZDPlusGst(price.totalCents) : null;
-  /** Total-to-pay with the GST-inclusive amount alongside. */
-  const totalWithGstLabel = price ? formatNZDPlusGstIncl(price.totalCents) : null;
+  // Discount applies to the ex-GST subtotal (mirrors the server); the +GST
+  // display is unchanged. Only reflected when the code has validated.
+  const discountCents =
+    price && discountState === "valid" && discountPercent
+      ? Math.round((price.totalCents * discountPercent) / 100)
+      : 0;
+  const netCents = price ? price.totalCents - discountCents : null;
+  const discountLabel = discountCents > 0 ? `−${formatNZDPlusGst(discountCents)}` : null;
+  /** Total-to-pay (net of any discount) with the GST-inclusive amount alongside. */
+  const totalWithGstLabel = netCents != null ? formatNZDPlusGstIncl(netCents) : null;
   const surchargeLabel =
     price && price.surchargeCents > 0 ? `+${formatNZDPlusGst(price.surchargeCents)}` : null;
   // Only flagged for the generic 2h option — picking a qualifying weekday
@@ -217,6 +272,7 @@ export function BookingFlow() {
           phone: v.phone,
           dob: v.dob,
           customerNote: v.customerNote || null,
+          discountCode: discountCode.trim() || null,
           agreeTerms: true,
           marketingOptIn: marketing,
           source: getStoredSource(),
@@ -394,8 +450,17 @@ export function BookingFlow() {
                   : []),
                 { label: "Name", value: getValues("name") || "—" },
                 { label: "Email", value: getValues("email") || "—" },
+                ...(discountLabel
+                  ? [{ label: `Discount${discountPercent ? ` (${discountPercent}%)` : ""}`, value: discountLabel }]
+                  : []),
                 { label: "Total", value: totalWithGstLabel ?? "—", accent: true },
               ]}
+            />
+            <DiscountField
+              value={discountCode}
+              state={discountState}
+              percent={discountPercent}
+              onChange={setDiscountCode}
             />
             {selectedOption?.isPack ? (
               <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
@@ -452,6 +517,7 @@ export function BookingFlow() {
           tierLabel={option ? tier.label : null}
           groupSize={groupSize}
           surchargeLabel={surchargeLabel}
+          discountLabel={discountLabel}
           totalLabel={totalWithGstLabel}
           dealNote={dealApplied ? WEEKDAY_DAYTIME_DEAL.label : null}
           packNote={selectedOption?.isPack ? PACK_SUMMARY_NOTE : null}

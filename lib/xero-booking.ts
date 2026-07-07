@@ -41,7 +41,7 @@ export async function invoiceBooking(bookingId: string): Promise<InvoiceBookingR
     const { data } = await supabase
       .from("bookings")
       .select(
-        "id, friendly_id, duration_hours, group_size, total_price_cents, start_time, end_time, invoice_status, customer:customers(*)",
+        "id, friendly_id, duration_hours, group_size, total_price_cents, discount_amount_cents, start_time, end_time, invoice_status, customer:customers(*)",
       )
       .eq("id", bookingId)
       .maybeSingle();

@@ -12,9 +12,16 @@ import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib
 import { normalizeNZPhone } from "@/lib/validation";
 import { invoiceBooking } from "@/lib/xero-booking";
 import { site } from "@/lib/site";
+import { formatNZ } from "@/lib/timezone";
+import {
+  DISCOUNT_EXPIRY_DAYS,
+  generateUniqueCode,
+  normalizeCode,
+} from "@/lib/discounts";
 import BookingConfirmed from "@/emails/BookingConfirmed";
 import BookingReceivedNewCustomer from "@/emails/BookingReceivedNewCustomer";
 import BookingCancelled from "@/emails/BookingCancelled";
+import DiscountOffer from "@/emails/DiscountOffer";
 import type { Booking, BookingStatus, Customer, PaymentStatus, PricingTier } from "@/lib/types";
 
 type FullBooking = Booking & { customer: Customer; pricing_tier: PricingTier };
@@ -323,4 +330,145 @@ export async function quickBook(formData: FormData) {
 
   revalidatePath("/admin");
   redirect(`/admin/bookings/${booking.id}`);
+}
+
+/* ------------------------------------------------------------------ *
+ * Discount codes
+ * ------------------------------------------------------------------ */
+
+type EmailDiscountResult =
+  | { ok: true; code: string }
+  | { ok: false; error: string };
+
+/**
+ * Generate a single-use % discount code tied to a booking's customer + booking,
+ * insert it, and email the customer a branded "come back for X% off" offer with
+ * a self-applying booking link. Defaults: single use, 60-day expiry.
+ */
+export async function emailDiscountCode(
+  bookingId: string,
+  percent: number,
+): Promise<EmailDiscountResult> {
+  await assertAdmin();
+
+  const pct = Math.round(Number(percent));
+  if (!Number.isInteger(pct) || pct < 1 || pct > 100) {
+    return { ok: false, error: "Enter a percentage between 1 and 100." };
+  }
+
+  const booking = await getFullBooking(bookingId);
+  if (!booking) return { ok: false, error: "Booking not found." };
+  if (!booking.customer.email) {
+    return { ok: false, error: "This customer has no email address." };
+  }
+
+  const supabase = createAdminClient();
+  const code = await generateUniqueCode(supabase, pct);
+  const expiresAt = new Date(Date.now() + DISCOUNT_EXPIRY_DAYS * 24 * 3600 * 1000);
+
+  const { error: insertError } = await supabase.from("discount_codes").insert({
+    code,
+    percent: pct,
+    status: "active",
+    max_uses: 1,
+    used_count: 0,
+    expires_at: expiresAt.toISOString(),
+    customer_id: booking.customer_id,
+    booking_id: booking.id,
+    note: `Sent from booking ${booking.friendly_id}`,
+  });
+  if (insertError) {
+    console.error("[discounts] insert failed", insertError);
+    return { ok: false, error: "Could not create the code. Try again." };
+  }
+
+  const result = await sendEmail({
+    to: booking.customer.email,
+    subject: `${pct}% off your next Unit 20 session`,
+    react: createElement(DiscountOffer, {
+      firstName: booking.customer.name.split(/\s+/)[0] || "there",
+      percent: pct,
+      code,
+      expiryLabel: formatNZ(expiresAt.toISOString(), "EEE d MMM yyyy"),
+      bookUrl: `${site.url}/studio/book?code=${encodeURIComponent(code)}`,
+    }),
+  });
+
+  revalidatePath(`/admin/bookings/${bookingId}`);
+  revalidatePath("/admin/discounts");
+
+  if (!result.ok) {
+    // The code exists and is usable; only the email failed.
+    return {
+      ok: false,
+      error: `Code ${code} created, but the email didn't send. You can share it manually.`,
+    };
+  }
+  return { ok: true, code };
+}
+
+/** Admin: create a code by hand (auto-name if blank). Reusable campaign codes
+ *  come from a high/blank max_uses. */
+export async function createDiscountCode(formData: FormData) {
+  await assertAdmin();
+  const supabase = createAdminClient();
+
+  const percent = Math.round(Number(formData.get("percent") ?? 0));
+  if (!Number.isInteger(percent) || percent < 1 || percent > 100) return;
+
+  const rawCode = String(formData.get("code") ?? "").trim();
+  const code = rawCode ? normalizeCode(rawCode) : await generateUniqueCode(supabase, percent);
+  if (!code) return;
+
+  // Blank/0 max_uses = unlimited (reusable campaign code).
+  const rawMax = String(formData.get("max_uses") ?? "").trim();
+  const maxUses = rawMax === "" || Number(rawMax) === 0 ? null : Math.max(1, Math.round(Number(rawMax)));
+
+  const rawExpiry = String(formData.get("expires_at") ?? "").trim();
+  let expiresAt: string | null = null;
+  if (rawExpiry) {
+    const d = new Date(rawExpiry);
+    if (!Number.isNaN(d.getTime())) expiresAt = d.toISOString();
+  }
+
+  const note = String(formData.get("note") ?? "").trim() || null;
+
+  const { error } = await supabase.from("discount_codes").insert({
+    code,
+    percent,
+    status: "active",
+    max_uses: maxUses,
+    used_count: 0,
+    expires_at: expiresAt,
+    note,
+  });
+  if (error) console.error("[discounts] manual create failed", error);
+  revalidatePath("/admin/discounts");
+}
+
+/** Admin: disable a code so it can no longer be redeemed. */
+export async function disableDiscountCode(id: string) {
+  await assertAdmin();
+  const supabase = createAdminClient();
+  await supabase.from("discount_codes").update({ status: "disabled" }).eq("id", id);
+  revalidatePath("/admin/discounts");
+}
+
+/** Admin: re-enable a disabled code. */
+export async function enableDiscountCode(id: string) {
+  await assertAdmin();
+  const supabase = createAdminClient();
+  await supabase.from("discount_codes").update({ status: "active" }).eq("id", id);
+  revalidatePath("/admin/discounts");
+}
+
+/** Admin: delete a code outright. Bookings that used it keep their net price
+ *  (discount_code_id is set null by the FK, discount_amount_cents is unchanged). */
+export async function deleteDiscountCode(id: string) {
+  await assertAdmin();
+  const supabase = createAdminClient();
+  // Detach from any bookings first so the FK doesn't block the delete.
+  await supabase.from("bookings").update({ discount_code_id: null }).eq("discount_code_id", id);
+  await supabase.from("discount_codes").delete().eq("id", id);
+  revalidatePath("/admin/discounts");
 }

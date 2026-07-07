@@ -12,6 +12,7 @@ export function BookingSummary({
   tierLabel,
   groupSize,
   surchargeLabel,
+  discountLabel,
   totalLabel,
   dealNote,
   packNote,
@@ -26,7 +27,9 @@ export function BookingSummary({
   groupSize: number;
   /** Group surcharge included in the total, e.g. "+$30.00+GST". */
   surchargeLabel?: string | null;
-  /** Total to pay, GST-explicit — e.g. "$80.00 + GST ($92.00)". */
+  /** Discount taken off the subtotal, e.g. "−$12.00+GST". */
+  discountLabel?: string | null;
+  /** Total to pay (net of discount), GST-explicit — e.g. "$80.00 + GST ($92.00)". */
   totalLabel: string | null;
   /** Set when the weekday-daytime rate applies, e.g. "Weekday daytime (Mon–Fri, 10am–4pm)". */
   dealNote?: string | null;
@@ -45,6 +48,7 @@ export function BookingSummary({
     { label: "Room", value: tierLabel },
     { label: "People", value: groupSize ? String(groupSize) : null },
     ...(surchargeLabel ? [{ label: "Group surcharge", value: surchargeLabel }] : []),
+    ...(discountLabel ? [{ label: "Discount", value: discountLabel }] : []),
   ];
 
   return (

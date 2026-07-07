@@ -48,6 +48,30 @@ export interface Customer {
   updated_at: string;
 }
 
+/** Lifecycle of a discount code (supabase migration 0010 / crew 0058). */
+export type DiscountStatus = "active" | "disabled" | "expired";
+
+/**
+ * A percentage discount code. Emitted from a booking (single-use, 60-day
+ * expiry, tied to a customer + booking) or created manually in the admin
+ * "Discounts" tab. `max_uses` null = unlimited (reusable campaign code).
+ * `percent` is applied to the ex-GST subtotal; the +GST display is unchanged.
+ */
+export interface DiscountCode {
+  id: string;
+  code: string; // stored UPPERCASE
+  percent: number; // 1..100
+  status: DiscountStatus;
+  max_uses: number | null; // null = unlimited
+  used_count: number;
+  expires_at: string | null;
+  customer_id: string | null;
+  booking_id: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Booking {
   id: string;
   friendly_id: string;
@@ -58,6 +82,11 @@ export interface Booking {
   pricing_tier_id: string;
   group_size: number;
   total_price_cents: number;
+  // Discount codes (supabase migration 0010 / crew 0058). `total_price_cents`
+  // is the NET (post-discount) ex-GST total; `discount_amount_cents` is how
+  // much came off (0 when none applied).
+  discount_code_id: string | null;
+  discount_amount_cents: number;
   is_peak: boolean;
   status: BookingStatus;
   payment_method: PaymentMethod;

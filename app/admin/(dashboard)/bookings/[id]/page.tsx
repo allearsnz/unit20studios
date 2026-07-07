@@ -3,12 +3,13 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BookingActions } from "@/components/admin/BookingActions";
+import { DiscountOfferControl } from "@/components/admin/DiscountOfferControl";
 import { PaymentControl } from "@/components/admin/PaymentControl";
 import { InternalNote } from "@/components/admin/InternalNote";
 import { VerifyCustomerButton } from "@/components/admin/VerifyCustomerButton";
 import { StatusBadge } from "@/components/admin/badges";
 import { formatNZ } from "@/lib/timezone";
-import { formatNZDPlusGstIncl } from "@/lib/pricing";
+import { formatNZDPlusGst, formatNZDPlusGstIncl } from "@/lib/pricing";
 import { formatNZPhone } from "@/lib/validation";
 import type { BookingWithRelations } from "@/lib/types";
 
@@ -59,12 +60,19 @@ export default async function BookingDetailPage({
             <BookingActions id={b.id} status={b.status} />
           </Panel>
 
+          <Panel title="Rebook offer">
+            <DiscountOfferControl bookingId={b.id} />
+          </Panel>
+
           <Panel title="Session">
             <Dl
               rows={[
                 ["When", `${formatNZ(b.start_time, "EEE d MMM yyyy")} · ${formatNZ(b.start_time, "HH:mm")}–${formatNZ(b.end_time, "HH:mm")}`],
                 ["Duration", `${b.duration_hours}h`],
                 ["Room", `${b.pricing_tier?.label ?? "—"} · ${b.group_size} people`],
+                ...(b.discount_amount_cents > 0
+                  ? ([["Discount", `−${formatNZDPlusGst(b.discount_amount_cents)}`]] as [string, string][])
+                  : []),
                 ["Total", formatNZDPlusGstIncl(b.total_price_cents)],
                 ["Source", b.source || "direct"],
                 ["Booked", formatNZ(b.created_at, "d MMM yyyy, HH:mm")],

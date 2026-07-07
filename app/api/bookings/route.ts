@@ -10,6 +10,7 @@ import {
   isWeekdayDaytime,
 } from "@/lib/pricing";
 import { sendBookingCreatedEmails } from "@/lib/notifications";
+import { discountAmountCents, validateDiscountCode } from "@/lib/discounts";
 import type { Booking, Customer, PricingTier } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
@@ -82,12 +83,27 @@ export async function POST(req: NextRequest) {
 
   // Base rate for the chosen option (the start time applies the
   // weekday-daytime 2h deal where it fits) + flat surcharge for groups of 5+.
-  const { baseCents, surchargeCents, totalCents: total } = calcBookingPriceCents({
+  const { baseCents, surchargeCents, totalCents: subtotal } = calcBookingPriceCents({
     tier,
     optionId,
     start,
     groupSize: input.groupSize,
   });
+
+  // Discount code (server is the source of truth). Re-validate the submitted
+  // code; if valid, take the percent off the ex-GST subtotal. An invalid/absent
+  // code simply books at full price — it never fails the booking. The atomic
+  // redemption (below) happens only after the booking row exists.
+  let discountId: string | null = null;
+  let discountCents = 0;
+  if (input.discountCode && input.discountCode.trim()) {
+    const check = await validateDiscountCode(supabase, input.discountCode);
+    if (check.valid && check.row) {
+      discountId = check.row.id;
+      discountCents = discountAmountCents(subtotal, check.percent);
+    }
+  }
+  const total = subtotal - discountCents;
 
   // find-or-create customer
   const email = input.email.toLowerCase();
@@ -160,6 +176,35 @@ export async function POST(req: NextRequest) {
   }
 
   const booking = bookingRow as Booking;
+
+  // Redeem the discount (if one was applied). The booking already exists at the
+  // NET price, so redemption is a separate atomic step: `redeem_discount_code`
+  // claims one use only if the code is still redeemable, expiring it at its cap.
+  // If a concurrent booking grabbed the last use between validate and here, the
+  // claim fails and we revert this booking to full price so nothing is given
+  // away for free.
+  if (discountId) {
+    const { data: redeemed, error: redeemError } = await supabase.rpc("redeem_discount_code", {
+      p_id: discountId,
+    });
+    if (!redeemError && redeemed === true) {
+      await supabase
+        .from("bookings")
+        .update({ discount_code_id: discountId, discount_amount_cents: discountCents })
+        .eq("id", booking.id);
+      booking.discount_code_id = discountId;
+      booking.discount_amount_cents = discountCents;
+    } else {
+      // Lost the race (or RPC failed) — charge full price.
+      await supabase
+        .from("bookings")
+        .update({ total_price_cents: subtotal, discount_amount_cents: 0 })
+        .eq("id", booking.id);
+      booking.total_price_cents = subtotal;
+      discountCents = 0;
+      discountId = null;
+    }
+  }
 
   // Flag pack bookings for admin: the scheduled slot is only the first 2 hours
   // of the prepaid 10-hour block.
