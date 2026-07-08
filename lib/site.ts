@@ -6,7 +6,7 @@ export const site = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "https://studio.unit20.nz",
   email: process.env.RESEND_REPLY_TO ?? "studio@unit20.nz",
   phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? "",
-  tagline: "DJ practice studio, gear hire & venue",
+  tagline: "DJ studio and equipment hire in Christchurch",
   // INTEGRATION NOTE: the venue/events experience already lives on the existing
   // unit20.nz site. For now the hub + nav link out here. The unit20.nz dev will
   // integrate this Studio/Hire app + hub into that site.

@@ -37,11 +37,11 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://studio.unit20.nz";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Unit 20 — DJ practice studio, gear hire & venue · Christchurch",
+    default: "Unit 20 — DJ studio & equipment hire · Christchurch",
     template: "%s · Unit 20",
   },
   description:
-    "Practice on real club gear, hire production equipment, and host events at Unit 20 — Christchurch's underground DJ studio, hire house and venue.",
+    "Practice on real club gear and hire production equipment at Unit 20 — Christchurch's underground DJ studio and equipment hire house.",
   applicationName: "Unit 20",
   openGraph: {
     type: "website",

@@ -5,14 +5,14 @@ import { JsonLd } from "@/components/seo/JsonLd";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Unit 20 — Studio, Hire & Venue · Christchurch",
+  title: "Unit 20 — DJ studio & equipment hire · Christchurch",
   description:
-    "Practice on real club gear, hire production equipment, and put on a night. Unit 20 is Christchurch's underground DJ studio, gear-hire house and event venue.",
+    "Practice on real club gear and hire production equipment. Unit 20 is Christchurch's underground DJ studio and equipment hire house.",
   alternates: { canonical: "/" },
   openGraph: {
-    title: "Unit 20 — Studio, Hire & Venue",
+    title: "Unit 20 — DJ studio & equipment hire",
     description:
-      "Christchurch's underground DJ studio, gear-hire house and event venue.",
+      "Christchurch's underground DJ studio and equipment hire house.",
     url: "/",
   },
 };
@@ -63,16 +63,6 @@ const organizationLd = {
         url: `${site.url}/hire`,
       },
     },
-    {
-      "@type": "Offer",
-      itemOffered: {
-        "@type": "Service",
-        name: "Event venue",
-        serviceType: "Event venue",
-        areaServed: "Christchurch, New Zealand",
-        url: site.venueUrl,
-      },
-    },
   ],
 };
 
@@ -95,8 +85,7 @@ export default function HomePage() {
 
       <main id="main">
         <h1 className="sr-only">
-          Unit 20 — DJ practice studio, gear hire and event venue in
-          Christchurch
+          Unit 20 — DJ studio and equipment hire in Christchurch
         </h1>
         <Hub />
       </main>

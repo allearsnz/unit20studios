@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Unit 20 — DJ practice studio, gear hire & venue in Christchurch";
+export const alt = "Unit 20 — DJ studio & equipment hire in Christchurch";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -29,7 +29,7 @@ export default function OpengraphImage() {
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div style={{ fontSize: 88, lineHeight: 1.0, fontWeight: 700, letterSpacing: -3 }}>
-            Studio · Hire · Venue
+            Studio · Hire
           </div>
           <div style={{ fontSize: 30, color: "#8a8580", letterSpacing: -0.5 }}>
             Practice on real club gear. Christchurch, Aotearoa.
