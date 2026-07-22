@@ -17,9 +17,9 @@ one-time Google setup.
    account, not a personal one).
 2. Click **Add property**. Choose one:
    - **URL prefix** → enter `https://studio.unit20.nz` — simplest, keeps the
-     studio's data separate from the venue site. **Recommended.**
-   - **Domain** → enter `unit20.nz` — covers every subdomain (studio + venue) in
-     one property; requires a DNS TXT record.
+     studio's data separate from the main `unit20.nz` site. **Recommended.**
+   - **Domain** → enter `unit20.nz` — covers every subdomain in one property;
+     requires a DNS TXT record.
 
 ## 2. Verify ownership
 
@@ -51,7 +51,7 @@ Google limits manual requests to roughly **~10 per day**, so do the priority
 pages first (over 1–2 days if needed):
 
 **Priority (do these first):**
-- `https://studio.unit20.nz/studio`
+- `https://studio.unit20.nz/` (studio landing — the main page)
 - `https://studio.unit20.nz/studio/pricing`
 - `https://studio.unit20.nz/studio/book`
 - `https://studio.unit20.nz/hire/sound-hire-christchurch`
@@ -59,7 +59,6 @@ pages first (over 1–2 days if needed):
 - `https://studio.unit20.nz/hire/backline-hire-christchurch`
 
 **Then the rest:**
-- `https://studio.unit20.nz/` (home / hub)
 - `https://studio.unit20.nz/studio/the-room`
 - `https://studio.unit20.nz/studio/info`
 - `https://studio.unit20.nz/hire`

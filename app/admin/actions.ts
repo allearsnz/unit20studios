@@ -11,6 +11,8 @@ import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
 import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
 import { invoiceBooking } from "@/lib/xero-booking";
+import { grantMilestoneRewards } from "@/lib/rewards";
+import { creditBankedHours } from "@/lib/banked-hours";
 import { site } from "@/lib/site";
 import { formatNZ } from "@/lib/timezone";
 import {
@@ -88,6 +90,18 @@ export async function setBookingStatus(id: string, status: BookingStatus) {
     await supabase.from("bookings").update({ status }).eq("id", id);
   }
 
+  // Reaching 'completed' grows the customer's play time — mint any milestone
+  // reward they just earned (idempotent; never throws).
+  if (status === "completed") {
+    const { data: row } = await supabase
+      .from("bookings")
+      .select("customer_id")
+      .eq("id", id)
+      .maybeSingle();
+    const customerId = (row as { customer_id: string } | null)?.customer_id;
+    if (customerId) await grantMilestoneRewards(supabase, customerId);
+  }
+
   revalidatePath(`/admin/bookings/${id}`);
   revalidatePath("/admin");
 }
@@ -118,10 +132,54 @@ export async function verifyCustomer(customerId: string) {
   revalidatePath("/admin/customers");
 }
 
+/**
+ * Admin: manually adjust a customer's banked-hours balance (correction, comp,
+ * or claw-back). Writes an `adjustment` ledger entry — negative deltas allowed
+ * (admin may deliberately zero a mistaken pack), so this uses a plain insert
+ * rather than the balance-guarded debit RPC.
+ */
+export async function adjustBankedHours(formData: FormData) {
+  await assertAdmin();
+  const customerId = String(formData.get("customerId") ?? "").trim();
+  const delta = Math.trunc(Number(formData.get("delta") ?? 0));
+  const note = String(formData.get("note") ?? "").trim() || null;
+  if (!customerId || !Number.isInteger(delta) || delta === 0) return;
+
+  const supabase = createAdminClient();
+  await creditBankedHours(supabase, {
+    customerId,
+    hours: delta,
+    reason: "adjustment",
+    note,
+  });
+  revalidatePath(`/admin/customers/${customerId}`);
+}
+
 export async function cancelBooking(id: string) {
   await assertAdmin();
   const supabase = createAdminClient();
-  await supabase.from("bookings").update({ status: "cancelled" }).eq("id", id);
+
+  // Give back any banked hours this booking drew — but only on the first
+  // transition into 'cancelled', so re-cancelling can't double-refund.
+  const { data: transitioned } = await supabase
+    .from("bookings")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+    .neq("status", "cancelled")
+    .select("customer_id, friendly_id, banked_hours_used")
+    .maybeSingle();
+  const t = transitioned as
+    | { customer_id: string; friendly_id: string; banked_hours_used: number }
+    | null;
+  if (t && t.banked_hours_used > 0) {
+    await creditBankedHours(supabase, {
+      customerId: t.customer_id,
+      hours: t.banked_hours_used,
+      reason: "session_refund",
+      bookingId: id,
+      note: `Cancelled booking ${t.friendly_id}`,
+    });
+  }
 
   const booking = await getFullBooking(id);
   if (booking?.customer.email) {

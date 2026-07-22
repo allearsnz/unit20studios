@@ -7,11 +7,21 @@ import { StatusBadge } from "@/components/admin/badges";
 import { formatNZ } from "@/lib/timezone";
 import { formatNZDPlusGst } from "@/lib/pricing";
 import { formatNZPhone } from "@/lib/validation";
-import type { Booking, Customer } from "@/lib/types";
+import { bankedHoursBalance, hourLedgerEntries } from "@/lib/banked-hours";
+import { completedPlayHours } from "@/lib/rewards";
+import { adjustBankedHours } from "@/app/admin/actions";
+import type { Booking, Customer, HourLedgerEntry } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 type HistoryRow = Booking & { pricing_tier: { label: string } | null };
+
+const LEDGER_REASON_LABEL: Record<HourLedgerEntry["reason"], string> = {
+  pack_purchase: "Pack purchase",
+  session_used: "Session used",
+  session_refund: "Refund",
+  adjustment: "Adjustment",
+};
 
 export default async function CustomerDetailPage({
   params,
@@ -22,17 +32,28 @@ export default async function CustomerDetailPage({
 
   let customer: Customer | null = null;
   let history: HistoryRow[] = [];
+  let bankedBalance = 0;
+  let ledger: HourLedgerEntry[] = [];
+  let completedHours = 0;
   try {
     const supabase = createAdminClient();
     const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
     customer = (data as Customer | null) ?? null;
     if (customer) {
-      const { data: bks } = await supabase
-        .from("bookings")
-        .select("*, pricing_tier:pricing_tiers(label)")
-        .eq("customer_id", id)
-        .order("start_time", { ascending: false });
+      const [{ data: bks }, balance, entries, played] = await Promise.all([
+        supabase
+          .from("bookings")
+          .select("*, pricing_tier:pricing_tiers(label)")
+          .eq("customer_id", id)
+          .order("start_time", { ascending: false }),
+        bankedHoursBalance(supabase, id),
+        hourLedgerEntries(supabase, id),
+        completedPlayHours(supabase, id),
+      ]);
       history = (bks as HistoryRow[]) ?? [];
+      bankedBalance = balance;
+      ledger = entries;
+      completedHours = played;
     }
   } catch {
     customer = null;
@@ -78,6 +99,74 @@ export default async function CustomerDetailPage({
           <Link href="/admin/quick-book" className="btn btn-secondary mt-6 w-full h-10 font-mono text-xs uppercase tracking-meta">
             Create a booking
           </Link>
+        </section>
+
+        <section className="card h-fit p-6 lg:col-start-1">
+          <h2 className="eyebrow mb-5">Banked hours &amp; play time</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="mono text-2xl text-text">{bankedBalance}</p>
+              <p className="font-mono text-[11px] uppercase tracking-meta text-text-muted">Banked hrs</p>
+            </div>
+            <div>
+              <p className="mono text-2xl text-text">{completedHours}</p>
+              <p className="font-mono text-[11px] uppercase tracking-meta text-text-muted">
+                Played · {c.rewards_granted_hours} rewarded
+              </p>
+            </div>
+          </div>
+
+          {ledger.length > 0 ? (
+            <ul className="mt-5 border-t border-border">
+              {ledger.map((e) => (
+                <li key={e.id} className="flex items-baseline justify-between gap-3 border-b border-border py-2.5">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[11px] uppercase tracking-meta text-text-muted">
+                      {LEDGER_REASON_LABEL[e.reason]}
+                    </p>
+                    <p className="truncate text-xs text-text-dim">
+                      {formatNZ(e.created_at, "d MMM yyyy")}
+                      {e.note ? ` · ${e.note}` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={`mono text-sm ${e.delta_hours > 0 ? "text-accent" : "text-text"}`}
+                  >
+                    {e.delta_hours > 0 ? "+" : ""}
+                    {e.delta_hours}h
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-5 text-sm text-text-muted">No banked-hours activity.</p>
+          )}
+
+          <form action={adjustBankedHours} className="mt-5 border-t border-border pt-5">
+            <input type="hidden" name="customerId" value={c.id} />
+            <p className="font-mono text-[11px] uppercase tracking-meta text-text-muted">
+              Adjust balance
+            </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                type="number"
+                name="delta"
+                step={1}
+                placeholder="±hrs"
+                required
+                className="input h-10 w-24"
+              />
+              <input
+                type="text"
+                name="note"
+                placeholder="Reason (optional)"
+                className="input h-10 flex-1"
+              />
+            </div>
+            <button type="submit" className="btn btn-secondary mt-3 h-10 w-full font-mono text-xs uppercase tracking-meta">
+              Apply adjustment
+            </button>
+          </form>
         </section>
 
         <section>

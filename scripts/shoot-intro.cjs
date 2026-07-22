@@ -18,7 +18,7 @@ const fs = require("fs");
   await page.waitForTimeout(450);
   await page.screenshot({ path: ".screenshots/sweep-3.png" });
   await page.waitForTimeout(1200);
-  await page.screenshot({ path: ".screenshots/hub-after-intro.png" });
+  await page.screenshot({ path: ".screenshots/home-after-intro.png" });
 
   await browser.close();
   console.log("SWEEP_DONE");

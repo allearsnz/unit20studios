@@ -4,16 +4,24 @@ import Link from "next/link";
 import { ArrowRight, Banknote, Clock, MapPin, Users } from "lucide-react";
 import { ParallaxPhoto } from "@/components/studio/ParallaxPhoto";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { PhotoBand } from "@/components/ui/PhotoBand";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { BULK_PACK, FLAT_TIER, WEEKDAY_DAYTIME_DEAL, formatNZDPlusGst } from "@/lib/pricing";
 import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "The Studio — practice on real club gear",
+  title: {
+    absolute: "Unit 20 — DJ studio & equipment hire · Christchurch",
+  },
   description:
     "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 10am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm) two-hour sessions just $60+GST.",
-  alternates: { canonical: "/studio" },
-  openGraph: { title: "Unit 20 — The Studio", url: "/studio" },
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Unit 20 — DJ studio & equipment hire",
+    description:
+      "Practice on real club gear. Christchurch's DJ studio and equipment hire house.",
+    url: "/",
+  },
 };
 
 const GEAR = [
@@ -39,12 +47,61 @@ const GEAR = [
   },
 ];
 
+const organizationLd = {
+  "@context": "https://schema.org",
+  "@type": ["Organization", "LocalBusiness"],
+  "@id": `${site.url}/#business`,
+  name: site.name,
+  legalName: site.legalName,
+  description: site.tagline,
+  url: site.url,
+  image: `${site.url}/opengraph-image`,
+  email: site.email,
+  ...(site.phone ? { telephone: site.phone } : {}),
+  address: {
+    "@type": "PostalAddress",
+    streetAddress: site.address.street,
+    addressLocality: site.address.locality,
+    addressRegion: site.address.region,
+    postalCode: site.address.postalCode,
+    addressCountry: site.address.country,
+  },
+  geo: {
+    "@type": "GeoCoordinates",
+    latitude: site.geo.lat,
+    longitude: site.geo.lng,
+  },
+  sameAs: [site.social.instagram],
+  makesOffer: [
+    {
+      "@type": "Offer",
+      itemOffered: {
+        "@type": "Service",
+        name: "DJ practice studio hire",
+        serviceType: "DJ practice studio",
+        areaServed: "Christchurch, New Zealand",
+        url: site.url,
+      },
+    },
+    {
+      "@type": "Offer",
+      itemOffered: {
+        "@type": "Service",
+        name: "DJ & PA equipment hire",
+        serviceType: "Audio and lighting equipment hire",
+        areaServed: "Christchurch, New Zealand",
+        url: `${site.url}/hire`,
+      },
+    },
+  ],
+};
+
 const serviceLd = {
   "@context": "https://schema.org",
   "@type": "Service",
   name: "DJ practice studio hire",
   serviceType: "DJ practice studio",
-  url: `${site.url}/studio`,
+  url: site.url,
   areaServed: { "@type": "City", name: "Christchurch" },
   provider: {
     "@type": "Organization",
@@ -76,9 +133,10 @@ const serviceLd = {
   ],
 };
 
-export default function StudioPage() {
+export default function HomePage() {
   return (
     <>
+      <JsonLd data={organizationLd} />
       <JsonLd data={serviceLd} />
 
       {/* hero */}
@@ -218,8 +276,16 @@ export default function StudioPage() {
         </div>
       </Section>
 
+      {/* full-bleed booth photography */}
+      <PhotoBand
+        src="/studio.png"
+        alt="Pioneer DJ mixer channel strip lit blue in the Unit 20 booth"
+        eyebrow="The booth"
+        title="Flagship Pioneer, dialled in and ready — every single session."
+      />
+
       {/* the kit */}
-      <Section className="border-t border-border">
+      <Section>
         <div className="grid gap-10 md:grid-cols-[0.8fr_1.2fr] md:gap-16">
           <div>
             <SectionHeading

@@ -13,7 +13,7 @@ export type BookingPostSessionProps = {
 
 export default function BookingPostSession({
   firstName = "there",
-  bookUrl = "https://unit20.nz/studio/book",
+  bookUrl = "https://studio.unit20.nz/studio/book",
 }: BookingPostSessionProps) {
   return (
     <EmailLayout preview="How was the session?" eyebrow="Post-session">

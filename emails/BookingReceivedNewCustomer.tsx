@@ -16,7 +16,7 @@ export default function BookingReceivedNewCustomer({
   tierLabel = "Up to 8 people",
   groupSize = 3,
   total = "$80.00 + GST ($92.00)",
-  manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
+  manageUrl = "https://studio.unit20.nz/studio/book/confirmation?id=U20-2026-0042",
   rateNote = null,
   surchargeLabel = null,
   packNote = null,

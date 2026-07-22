@@ -105,7 +105,7 @@ export const HIRE_SERVICES: HireService[] = [
     intro: {
       title: "Sound for the whole event, not just the boxes",
       paragraphs: [
-        "Tell us the venue, the headcount and what's playing, and we'll spec a system that fits — a single powered speaker for a backyard birthday, tops and subs for a club night, or RCF HDL 30 line arrays for festival stages. Delivery, setup and pack-down within Christchurch are part of the job.",
+        "Tell us the location, the headcount and what's playing, and we'll spec a system that fits — a single powered speaker for a backyard birthday, tops and subs for a club night, or RCF HDL 30 line arrays for festival stages. Delivery, setup and pack-down within Christchurch are part of the job.",
         "Through All Ears we can also run the whole night: sound tech on the desk, lighting, staging and backline, on the ground in Christchurch and across the South Island. One supplier, one quote.",
       ],
     },
@@ -120,7 +120,7 @@ export const HIRE_SERVICES: HireService[] = [
       },
       {
         q: "What size events can you cover?",
-        a: "Anything from a single Bluetooth speaker for a backyard party up to festival stages on RCF HDL 30 line arrays and TTL6 systems. Give us the venue and headcount and we'll spec it.",
+        a: "Anything from a single Bluetooth speaker for a backyard party up to festival stages on RCF HDL 30 line arrays and TTL6 systems. Give us the location and headcount and we'll spec it.",
       },
     ],
   },
@@ -138,7 +138,7 @@ export const HIRE_SERVICES: HireService[] = [
     intro: {
       title: "One supplier for the whole stage",
       paragraphs: [
-        "Backline is quoted per job rather than off a rate card — every rider is different. Send us your tech rider or a plain list of what the acts need, with the venue and dates, and we'll come back with a package and a price.",
+        "Backline is quoted per job rather than off a rate card — every rider is different. Send us your tech rider or a plain list of what the acts need, with the location and dates, and we'll come back with a package and a price.",
         "Because we also run sound, lighting and staging through All Ears, backline can land as part of one production quote instead of another supplier to chase — for club shows, festivals, brand activations and private events across Christchurch and the South Island.",
       ],
     },
@@ -149,7 +149,7 @@ export const HIRE_SERVICES: HireService[] = [
     enquire: {
       eyebrowLabel: "Backline",
       title: "Send us the rider",
-      lead: "Amps, kits, keys, stands — tell us what the stage needs and we'll quote a full backline package. Include the venue, dates and a rough set count, and mention if you want us on sound or lights for the night too.",
+      lead: "Amps, kits, keys, stands — tell us what the stage needs and we'll quote a full backline package. Include the location, dates and a rough set count, and mention if you want us on sound or lights for the night too.",
       subject: "Backline hire enquiry",
     },
     extraFaqs: [
@@ -177,7 +177,7 @@ export const HIRE_SERVICES: HireService[] = [
     enquire: {
       eyebrowLabel: "Fixtures",
       title: "Inventory list coming soon",
-      lead: "Detailed fixture list is being finalised. For now, please get in touch with your event details — venue, dates, rough headcount, and the look you're after — and we'll spec a package.",
+      lead: "Detailed fixture list is being finalised. For now, please get in touch with your event details — location, dates, rough headcount, and the look you're after — and we'll spec a package.",
       subject: "Lighting hire enquiry",
     },
   },

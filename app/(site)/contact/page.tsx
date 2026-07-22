@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ArrowUpRight } from "lucide-react";
 import { ContactForm } from "@/components/contact/ContactForm";
+import { PhotoBand } from "@/components/ui/PhotoBand";
 import { SectionHeading } from "@/components/ui/Section";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { breadcrumbLd } from "@/lib/seo";
@@ -9,7 +10,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Contact",
   description:
-    "Get in touch with Unit 20 — studio bookings, gear-hire quotes and venue enquiries in central Christchurch.",
+    "Get in touch with Unit 20 — studio bookings and gear-hire quotes in central Christchurch.",
   alternates: { canonical: "/contact" },
 };
 
@@ -20,10 +21,11 @@ export default async function ContactPage({
 }) {
   const { subject, gear } = await searchParams;
   const defaultMessage = gear
-    ? `Hi — I'd like a quote for ${gear} hire.\n\nEvent / dates:\nVenue or area:\nAnything else I should know:`
+    ? `Hi — I'd like a quote for ${gear} hire.\n\nEvent / dates:\nLocation or area:\nAnything else I should know:`
     : "";
 
   return (
+    <>
     <section className="container-page pb-24 pt-32 md:pt-40">
       <JsonLd data={breadcrumbLd([{ name: "Contact", path: "/contact" }])} />
 
@@ -31,7 +33,7 @@ export default async function ContactPage({
         as="h1"
         eyebrow="Contact"
         title="Get in touch."
-        lead="Booking the studio, hiring gear, or putting on a night — tell us what you need and we'll come back quickly. Usually within a day."
+        lead="Booking the studio or hiring gear — tell us what you need and we'll come back quickly. Usually within a day."
       />
 
       <div className="mt-14 grid gap-12 md:grid-cols-[1.4fr_0.8fr] md:gap-16">
@@ -77,6 +79,14 @@ export default async function ContactPage({
         </aside>
       </div>
     </section>
+
+    <PhotoBand
+      src="/studio.png"
+      alt="Pioneer DJ mixer channel strip lit blue in the Unit 20 booth"
+      eyebrow="The room"
+      title="Four CDJ-3000s, a DJM-A9 and honest monitoring. Come play."
+    />
+    </>
   );
 }
 

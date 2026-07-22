@@ -2,20 +2,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { PhotoBand } from "@/components/ui/PhotoBand";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { breadcrumbLd } from "@/lib/seo";
+import { site } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About Unit 20",
   description:
-    "Unit 20 is a DJ practice studio, gear-hire house and event space in central Christchurch — real club gear, by the hour, for the people who actually use it.",
+    "Unit 20 is a DJ practice studio and gear-hire house in central Christchurch — real club gear, by the hour, for the people who actually use it.",
   alternates: { canonical: "/about" },
 };
 
 const PILLARS = [
-  { n: "01", t: "The Studio", d: "A proper booth to practice on real club gear, by the hour — day or night.", href: "/studio" },
+  { n: "01", t: "The Studio", d: "A proper booth to practice on real club gear, by the hour — day or night.", href: "/" },
   { n: "02", t: "Hire", d: "The same gear, out the door and across town for your party, night or event.", href: "/hire" },
-  { n: "03", t: "Venue / Events", d: "A raw room for the nights that don't fit anywhere else.", href: "https://unit20.nz", external: true },
+  { n: "03", t: "Live", d: "Tickets and line-ups for Unit 20 Live shows.", href: site.liveUrl, external: true },
 ];
 
 export default function AboutPage() {
@@ -33,10 +35,9 @@ export default function AboutPage() {
 
         <div className="mt-10 max-w-2xl space-y-6">
           <p className="lead text-pretty">
-            Today it&apos;s three things under one roof. A practice studio you can
-            book by the hour. A hire house that sends the same flagship gear out
-            to events across the city. And a venue for the nights that need a room
-            with no rules but the good ones.
+            Today it&apos;s a practice studio you can book by the hour, and a
+            hire house that sends the same flagship gear out to events across
+            the city.
           </p>
           <p className="lead text-pretty">
             No corporate gloss, no per-head upsell, no gatekeeping. Real gear,
@@ -46,8 +47,15 @@ export default function AboutPage() {
         </div>
       </Section>
 
-      <Section className="border-t border-border">
-        <SectionHeading eyebrow="What we do" title="Three rooms, one mission." />
+      <PhotoBand
+        src="/studio.png"
+        alt="Pioneer DJ mixer channel strip lit blue in the Unit 20 booth"
+        eyebrow="The gear"
+        title="The same players and mixer you'll stand behind on the night."
+      />
+
+      <Section>
+        <SectionHeading eyebrow="What we do" title="Real gear, three ways." />
         <div className="mt-10 grid gap-4 md:grid-cols-3">
           {PILLARS.map((p) =>
             p.external ? (
@@ -65,7 +73,7 @@ export default function AboutPage() {
 
       <Section className="border-t border-border">
         <div className="flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
-          <SectionHeading title="Come use the room." lead="Book a session, or get in touch about hire and events." />
+          <SectionHeading title="Come use the room." lead="Book a session, or get in touch about gear hire." />
           <div className="flex shrink-0 flex-wrap gap-3">
             <Link href="/studio/book" className="btn btn-primary">
               Book a session

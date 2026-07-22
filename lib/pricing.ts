@@ -86,7 +86,13 @@ export const PRICING_TIERS: Omit<PricingTier, "id">[] = [FLAT_TIER];
  * the time). Base prices mirror FLAT_TIER / WEEKDAY_DAYTIME_DEAL / BULK_PACK;
  * the group surcharge (GROUP_SURCHARGE) is added on top where it applies.
  */
-export type BookingOptionId = "1h" | "2h" | "2h-daytime" | "pack10";
+export type BookingOptionId =
+  | "1h"
+  | "2h"
+  | "2h-daytime"
+  | "pack10"
+  | "banked-1h"
+  | "banked-2h";
 
 export type BookingOption = {
   id: BookingOptionId;
@@ -100,6 +106,12 @@ export type BookingOption = {
   weekdayDaytimeOnly: boolean;
   /** True for the 10-hour pack. */
   isPack: boolean;
+  /**
+   * True when the session is paid for with prepaid banked hours (base $0; the
+   * customer's hour_ledger is debited). Only offered to signed-in accounts
+   * with enough balance.
+   */
+  usesBankedHours?: boolean;
   /** One-line card description. */
   note: string;
 };
@@ -143,8 +155,37 @@ export const BOOKING_OPTIONS: BookingOption[] = [
   },
 ];
 
+/**
+ * Banked-hours options — only shown to signed-in customers whose ledger balance
+ * covers the duration. Base price is $0 (the ledger is debited); the group
+ * surcharge for 5+ still applies in cash. Not part of BOOKING_OPTIONS, so the
+ * guest UI is unchanged.
+ */
+export const BANKED_OPTIONS: BookingOption[] = [
+  {
+    id: "banked-1h",
+    label: "1 hour · banked",
+    durationHours: 1,
+    baseCents: 0,
+    weekdayDaytimeOnly: false,
+    isPack: false,
+    usesBankedHours: true,
+    note: "Uses 1 of your prepaid hours.",
+  },
+  {
+    id: "banked-2h",
+    label: "2 hours · banked",
+    durationHours: 2,
+    baseCents: 0,
+    weekdayDaytimeOnly: false,
+    isPack: false,
+    usesBankedHours: true,
+    note: "Uses 2 of your prepaid hours.",
+  },
+];
+
 export function bookingOption(id: BookingOptionId): BookingOption {
-  const opt = BOOKING_OPTIONS.find((o) => o.id === id);
+  const opt = [...BOOKING_OPTIONS, ...BANKED_OPTIONS].find((o) => o.id === id);
   if (!opt) throw new Error(`Unknown booking option: ${id}`);
   return opt;
 }
@@ -180,6 +221,12 @@ export function calcBookingPriceCents(args: {
       break;
     case "pack10":
       baseCents = BULK_PACK.totalCents;
+      break;
+    case "banked-1h":
+    case "banked-2h":
+      // Paid with prepaid banked hours — the session itself is $0. Any group
+      // surcharge (5+ people) is still charged in cash below.
+      baseCents = 0;
       break;
   }
   const surchargeCents = groupSurchargeCents(option.durationHours, groupSize);

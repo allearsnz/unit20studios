@@ -21,7 +21,7 @@ export default function NotFound() {
           Back to the hub
           <ArrowRight className="h-4 w-4" aria-hidden />
         </Link>
-        <Link href="/studio" className="btn btn-secondary">
+        <Link href="/" className="btn btn-secondary">
           The studio
         </Link>
         <Link href="/contact" className="btn btn-secondary">

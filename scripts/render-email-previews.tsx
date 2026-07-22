@@ -13,6 +13,8 @@ import BookingReminder from "../emails/BookingReminder";
 import BookingPostSession from "../emails/BookingPostSession";
 import BookingCancelled from "../emails/BookingCancelled";
 import ContactForm from "../emails/ContactForm";
+import RewardEarned from "../emails/RewardEarned";
+import AccountWelcome from "../emails/AccountWelcome";
 
 const sample = {
   firstName: "Will",
@@ -78,6 +80,23 @@ async function main() {
         subject="Studio booking"
         message="Hi, keen to book the studio for a b2b practice session next weekend — is Saturday evening free?"
         sourcePage="/contact"
+      />,
+    ],
+    [
+      "reward-earned",
+      <RewardEarned
+        firstName={sample.firstName}
+        hours={20}
+        code="ENCORE50"
+        expiryLabel="Fri 5 Sep 2026"
+        bookUrl="https://studio.unit20.nz/studio/book?code=ENCORE50"
+      />,
+    ],
+    [
+      "account-welcome",
+      <AccountWelcome
+        firstName={sample.firstName}
+        accountUrl="https://studio.unit20.nz/account"
       />,
     ],
   ];

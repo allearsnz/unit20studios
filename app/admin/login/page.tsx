@@ -6,17 +6,20 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Wordmark } from "@/components/layout/Wordmark";
 
 /**
- * Passwordless admin sign-in via a 6-digit EMAIL CODE (not a magic link).
- * Deliberately code-based: this Supabase project is shared with the crew app,
- * so a magic-link redirect can fall back to the shared Site URL and bounce the
- * user into the wrong app. Typing the code establishes the session in-place —
- * no redirect, no /auth/callback, no redirect-allow-list matching involved.
- * Requires the Supabase "Magic Link" email template to include {{ .Token }}.
+ * Admin sign-in via email + PASSWORD (`signInWithPassword`).
+ * Deliberately password-based and redirect-free: this Supabase project is
+ * shared with the crew app, so a magic-link / OAuth redirect can fall back to
+ * the shared Site URL and bounce the user into the wrong app. Password sign-in
+ * establishes the session in-place — no redirect, no /auth/callback, no
+ * redirect-allow-list matching involved.
+ *
+ * The admin auth user already exists with a password (see README → Supabase
+ * setup). Forgot it? Reset it via /account/forgot (auth-method agnostic — works
+ * for the admin user too) or from the Supabase dashboard.
  */
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [step, setStep] = useState<"email" | "code">("email");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -25,49 +28,23 @@ export default function AdminLoginPage() {
     if (e === "config") {
       setError("Supabase isn't configured yet — add the env vars and restart.");
     } else if (e === "auth") {
-      setError("That sign-in code expired or is invalid — send a new one.");
+      setError("That sign-in link expired or is invalid — sign in with your password.");
     }
   }, []);
 
-  const sendCode = async (e: React.FormEvent) => {
+  const signIn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !password) return;
     setLoading(true);
     setError(null);
     try {
       const supabase = createSupabaseBrowserClient();
-      const { error: otpError } = await supabase.auth.signInWithOtp({
+      const { error: signInError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        options: { shouldCreateUser: false },
+        password,
       });
-      if (otpError) {
-        setError(otpError.message);
-        setLoading(false);
-        return;
-      }
-      setStep("code");
-      setLoading(false);
-    } catch {
-      setError("Sign-in is unavailable right now.");
-      setLoading(false);
-    }
-  };
-
-  const verify = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const token = code.trim();
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const supabase = createSupabaseBrowserClient();
-      const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token,
-        type: "email",
-      });
-      if (verifyError) {
-        setError("That code didn't work — check it and try again, or resend.");
+      if (signInError) {
+        setError("Wrong email or password.");
         setLoading(false);
         return;
       }
@@ -93,82 +70,53 @@ export default function AdminLoginPage() {
           </div>
         ) : null}
 
-        {step === "email" ? (
-          <form onSubmit={sendCode}>
-            <h1 className="h2 text-text">Sign in</h1>
-            <p className="lead mt-2 text-sm">Staff access only. We&rsquo;ll email you a sign-in code.</p>
+        <form onSubmit={signIn}>
+          <h1 className="h2 text-text">Sign in</h1>
+          <p className="lead mt-2 text-sm">Staff access only.</p>
 
-            <div className="mt-8">
-              <label htmlFor="email" className="font-mono text-meta uppercase tracking-meta text-text-muted">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                autoFocus
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input mt-2"
-              />
-            </div>
+          <div className="mt-8">
+            <label htmlFor="email" className="font-mono text-meta uppercase tracking-meta text-text-muted">
+              Email
+            </label>
+            <input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              autoFocus
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="input mt-2"
+            />
+          </div>
 
-            <button type="submit" disabled={loading} className="btn btn-primary mt-8 w-full">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Email me a code"}
-            </button>
-          </form>
-        ) : (
-          <form onSubmit={verify}>
-            <h1 className="h2 text-text">Enter your code</h1>
-            <p className="lead mt-2 text-sm">
-              We emailed a sign-in code to <span className="text-text">{email}</span>. Enter it below.
-            </p>
+          <div className="mt-6">
+            <label htmlFor="password" className="font-mono text-meta uppercase tracking-meta text-text-muted">
+              Password
+            </label>
+            <input
+              id="password"
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="input mt-2"
+            />
+          </div>
 
-            <div className="mt-8">
-              <label htmlFor="code" className="font-mono text-meta uppercase tracking-meta text-text-muted">
-                Sign-in code
-              </label>
-              <input
-                id="code"
-                type="text"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                autoFocus
-                maxLength={10}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                className="input mt-2 tracking-[0.4em]"
-              />
-            </div>
+          <button type="submit" disabled={loading} className="btn btn-primary mt-8 w-full">
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Sign in"}
+          </button>
 
-            <button type="submit" disabled={loading || code.length < 6} className="btn btn-primary mt-8 w-full">
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Verify & sign in"}
-            </button>
-
-            <div className="mt-6 flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("email");
-                  setCode("");
-                  setError(null);
-                }}
-                className="font-mono text-meta uppercase tracking-meta text-text-muted underline underline-offset-4"
-              >
-                Use a different email
-              </button>
-              <button
-                type="button"
-                disabled={loading}
-                onClick={() => sendCode({ preventDefault: () => {} } as React.FormEvent)}
-                className="font-mono text-meta uppercase tracking-meta text-text-muted underline underline-offset-4"
-              >
-                Resend code
-              </button>
-            </div>
-          </form>
-        )}
+          <p className="mt-6 font-mono text-meta uppercase tracking-meta text-text-dim">
+            Forgot your password?{" "}
+            <a href="/account/forgot" className="text-text-muted underline underline-offset-4">
+              Reset it
+            </a>
+            , then sign in here.
+          </p>
+        </form>
       </div>
     </div>
   );

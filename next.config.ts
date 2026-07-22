@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      // The studio landing now lives at the root. Sub-pages stay under /studio.
+      { source: "/studio", destination: "/", permanent: true },
+    ];
+  },
   experimental: {
     // three / drei ship modern ESM; keep optimized package imports tidy
     optimizePackageImports: ["lucide-react", "@react-three/drei"],

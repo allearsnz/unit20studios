@@ -1,4 +1,4 @@
-// Dev-only: screenshot the home hub at desktop + mobile for review.
+// Dev-only: screenshot the studio home page at desktop + mobile for review.
 const { chromium } = require("playwright");
 const fs = require("fs");
 
@@ -16,7 +16,7 @@ const OUT = ".screenshots";
     ],
   });
 
-  // Desktop
+  // Desktop — above the fold, then the whole page.
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     deviceScaleFactor: 2,
@@ -25,15 +25,18 @@ const OUT = ".screenshots";
   await page.goto(URL, { waitUntil: "load", timeout: 60000 });
   await page.waitForTimeout(4500);
   await page.screenshot({ path: `${OUT}/home-desktop.png` });
-
-  await page.locator("[data-panel]").first().hover();
-  await page.waitForTimeout(1600);
-  await page.screenshot({ path: `${OUT}/home-desktop-studio.png` });
-
-  await page.locator("[data-panel]").nth(1).hover();
-  await page.waitForTimeout(1400);
-  await page.screenshot({ path: `${OUT}/home-desktop-venue.png` });
   await ctx.close();
+
+  // Full-page pass at 1x — 2x overflows the max capture texture on a tall page.
+  const fctx = await browser.newContext({
+    viewport: { width: 1440, height: 900 },
+    deviceScaleFactor: 1,
+  });
+  const fpage = await fctx.newPage();
+  await fpage.goto(URL, { waitUntil: "load", timeout: 60000 });
+  await fpage.waitForTimeout(4000);
+  await fpage.screenshot({ path: `${OUT}/home-desktop-full.png`, fullPage: true });
+  await fctx.close();
 
   // Mobile
   const mctx = await browser.newContext({

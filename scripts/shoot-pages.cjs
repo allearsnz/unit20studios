@@ -2,7 +2,7 @@ const { chromium } = require("playwright");
 const fs = require("fs");
 
 const PAGES = [
-  ["studio", "/studio", 4200],
+  ["studio", "/", 4200],
   ["pricing", "/studio/pricing", 1800],
   ["book", "/studio/book", 2600],
   ["hire-cdj", "/hire/cdj-hire-christchurch", 1800],

@@ -14,9 +14,9 @@ export function Footer() {
           <div className="max-w-xl">
             <p className="eyebrow mb-4">Find the room</p>
             <p className="h2 text-text">
-              Book a session, hire the gear,
+              Book a session,
               <br />
-              or put on a night.
+              or hire the gear.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">

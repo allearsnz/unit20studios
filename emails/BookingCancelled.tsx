@@ -17,7 +17,7 @@ export default function BookingCancelled({
   firstName = "there",
   friendlyId = "U20-2026-0042",
   whenLabel = "Sat 1 Jun, 7:00pm – 9:00pm",
-  bookUrl = "https://unit20.nz/studio/book",
+  bookUrl = "https://studio.unit20.nz/studio/book",
 }: BookingCancelledProps) {
   return (
     <EmailLayout

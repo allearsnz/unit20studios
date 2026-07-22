@@ -192,10 +192,10 @@ export function EmailLayout({
             unit/20 &mdash; 20 Southwark Street, Christchurch Central 8011
             <br />
             <Link
-              href="https://unit20.nz"
+              href="https://studio.unit20.nz"
               style={{ color: c.muted, textDecoration: "underline" }}
             >
-              unit20.nz
+              studio.unit20.nz
             </Link>
             &nbsp;&middot;&nbsp;
             <Link
@@ -214,7 +214,6 @@ export function EmailLayout({
             <br />
             <span style={{ color: c.dim }}>
               -43.5365, 172.6336 &middot; DJ practice studio &middot; gear hire
-              &middot; venue
             </span>
           </Text>
         </Container>

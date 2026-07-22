@@ -18,7 +18,7 @@ export default function BookingReminder({
   firstName = "there",
   friendlyId = "U20-2026-0042",
   whenLabel = "Sat 1 Jun, 7:00pm – 9:00pm",
-  manageUrl = "https://unit20.nz/studio/book/confirmation?id=U20-2026-0042",
+  manageUrl = "https://studio.unit20.nz/studio/book/confirmation?id=U20-2026-0042",
 }: BookingReminderProps) {
   return (
     <EmailLayout

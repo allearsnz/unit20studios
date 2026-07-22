@@ -196,7 +196,7 @@ export default async function HireServicePage({
           <SectionHeading
             eyebrow={eyebrow("DJ players & mixers")}
             title="Pioneer DJ gear"
-            lead="Run a club-spec setup with the same gear used at Boiler Room, R&V and most Christchurch venues."
+            lead="Run a club-spec setup with the same gear used at Boiler Room, R&V and most Christchurch clubs."
           />
           <div className="mt-10">
             <ProductGrid products={djProducts} priorityCount={3} />
@@ -265,7 +265,7 @@ export default async function HireServicePage({
             <SectionHeading
               eyebrow={eyebrow("Larger systems")}
               title="Festival and full-club rigs"
-              lead="For full festival and club-spec sound we run RCF HDL 30 line arrays and TTL6 systems with backline support. Tell us your venue, headcount and any rider notes and we'll quote a tailored package."
+              lead="For full festival and club-spec sound we run RCF HDL 30 line arrays and TTL6 systems with backline support. Tell us your location, headcount and any rider notes and we'll quote a tailored package."
             />
             <div className="flex items-end">
               <a
@@ -321,7 +321,7 @@ export default async function HireServicePage({
         </ul>
         <div className="mt-10 border-t border-border pt-8">
           <Link
-            href="/studio"
+            href="/"
             className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-accent"
           >
             Looking for the studio? Practice on this gear at Unit 20 Studio

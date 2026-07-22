@@ -15,8 +15,8 @@ design pass and reconcile — but do not regress the locked tokens.
 
 ## 1. Brand positioning
 
-Unit 20 is a Christchurch DJ practice studio, gear-hire business, and event
-venue. **Club / underground-adjacent. Not corporate.** Reference points:
+Unit 20 is a Christchurch DJ practice studio and gear-hire business.
+**Club / underground-adjacent. Not corporate.** Reference points:
 Resident Advisor, Boiler Room, Pirate.com, Bureau Borsché.
 
 Voice: direct, confident, a little nocturnal. Real copy, never lorem. Short

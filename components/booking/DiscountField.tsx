@@ -1,11 +1,12 @@
 "use client";
 
-export type DiscountState = "idle" | "checking" | "valid" | "invalid";
+export type DiscountState = "idle" | "checking" | "valid" | "invalid" | "standard_only";
 
 /**
  * Discount-code input for the booking flow. Purely UX — the booking API
  * re-validates and applies the discount server-side. Shows live validation
- * feedback and the % once a code checks out.
+ * feedback and the % once a code checks out. Hidden entirely for banked-hours
+ * bookings (codes never combine with prepaid hours).
  */
 export function DiscountField({
   value,
@@ -40,6 +41,10 @@ export function DiscountField({
       ) : state === "valid" && percent ? (
         <p className="mt-2 font-mono text-[11px] uppercase tracking-meta text-accent">
           {percent}% off applied
+        </p>
+      ) : state === "standard_only" ? (
+        <p className="mt-2 font-mono text-[11px] uppercase tracking-meta text-danger">
+          This code works on standard sessions — not the 10-hour pack.
         </p>
       ) : state === "invalid" ? (
         <p className="mt-2 font-mono text-[11px] uppercase tracking-meta text-danger">

@@ -7,10 +7,9 @@ export const site = {
   email: process.env.RESEND_REPLY_TO ?? "studio@unit20.nz",
   phone: process.env.NEXT_PUBLIC_BUSINESS_PHONE ?? "",
   tagline: "DJ studio and equipment hire in Christchurch",
-  // INTEGRATION NOTE: the venue/events experience already lives on the existing
-  // unit20.nz site. For now the hub + nav link out here. The unit20.nz dev will
-  // integrate this Studio/Hire app + hub into that site.
-  venueUrl: process.env.NEXT_PUBLIC_VENUE_URL ?? "https://unit20.nz",
+  // Unit 20 Live — the shows/ticketing side, kept as a plain outbound link.
+  // This site is the studio only; nothing here describes or promotes Live.
+  liveUrl: process.env.NEXT_PUBLIC_LIVE_URL ?? "https://unit20.nz",
   address: {
     street: "20 Southwark Street",
     locality: "Christchurch Central",
@@ -25,13 +24,20 @@ export const site = {
   },
 } as const;
 
-export type NavLink = { label: string; href: string; external?: boolean };
+export type NavLink = {
+  label: string;
+  href: string;
+  external?: boolean;
+  /** Extra path prefix that should also light this item up as current. */
+  activePrefix?: string;
+};
 
 export const primaryNav: NavLink[] = [
-  { label: "Studio", href: "/studio" },
+  { label: "Studio", href: "/", activePrefix: "/studio" },
   { label: "Hire", href: "/hire" },
-  { label: "Venue / Events", href: site.venueUrl, external: true },
+  { label: "Live", href: site.liveUrl, external: true },
   { label: "About", href: "/about" },
+  { label: "Account", href: "/account" },
   { label: "Contact", href: "/contact" },
 ];
 
@@ -57,9 +63,10 @@ export const footerNav: { title: string; links: NavLink[] }[] = [
     ],
   },
   {
-    title: "Visit",
+    title: "More",
     links: [
-      { label: "Venue / Events", href: site.venueUrl, external: true },
+      { label: "My account", href: "/account" },
+      { label: "Live", href: site.liveUrl, external: true },
       { label: "About", href: "/about" },
       { label: "Contact", href: "/contact" },
     ],

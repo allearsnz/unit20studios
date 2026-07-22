@@ -40,7 +40,7 @@ export default function InfoPage() {
         data={[
           faqPageLd(FAQS),
           breadcrumbLd([
-            { name: "Studio", path: "/studio" },
+            { name: "Studio", path: "/" },
             { name: "Before you come", path: "/studio/info" },
           ]),
         ]}

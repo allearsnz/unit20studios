@@ -15,6 +15,8 @@ import { BookingSummary } from "./BookingSummary";
 import { DiscountField, type DiscountState } from "./DiscountField";
 import { detailsSchema, type DetailsValues, type Slot } from "./types";
 import {
+  BANKED_OPTIONS,
+  BOOKING_OPTIONS,
   BULK_PACK,
   FLAT_LIMITS,
   FLAT_TIER,
@@ -33,9 +35,18 @@ import { formatNZ } from "@/lib/timezone";
 import { getStoredSource } from "@/lib/attribution";
 import { cn } from "@/lib/utils";
 
+/** Signed-in account context — prefills details and unlocks banked options. */
+export type BookingAccount = {
+  name: string;
+  email: string;
+  phone: string;
+  dob: string;
+  bankedHours: number;
+};
+
 const STEPS = ["Date", "Option", "Time", "Group", "Details", "Terms", "Review"];
 
-const PACK_SUMMARY_NOTE = `10-hour pack: this books your first ${BULK_PACK.firstSessionHours} hours — the other ${BULK_PACK.packHours - BULK_PACK.firstSessionHours} are used across future visits, and we'll arrange them with you.`;
+const PACK_SUMMARY_NOTE = `10-hour pack: this books your first ${BULK_PACK.firstSessionHours} hours — the other ${BULK_PACK.packHours - BULK_PACK.firstSessionHours} bank to your account, and you can draw them down whenever suits.`;
 
 function nzToday() {
   return formatNZ(new Date(), "yyyy-MM-dd");
@@ -74,10 +85,18 @@ declare global {
   }
 }
 
-export function BookingFlow() {
+export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const router = useRouter();
   const min = nzToday();
   const max = addDaysStr(min, 90);
+
+  const bankedHours = account?.bankedHours ?? 0;
+
+  // Standard options always; banked options only when the balance covers them.
+  const availableOptions = useMemo<BookingOption[]>(() => {
+    const banked = bankedHours > 0 ? BANKED_OPTIONS.filter((o) => bankedHours >= o.durationHours) : [];
+    return [...BOOKING_OPTIONS, ...banked];
+  }, [bankedHours]);
 
   const [step, setStep] = useState(0);
   const [date, setDate] = useState<string | null>(null);
@@ -100,6 +119,15 @@ export function BookingFlow() {
   const { register, formState: { errors }, trigger, getValues } = useForm<DetailsValues>({
     resolver: zodResolver(detailsSchema),
     mode: "onBlur",
+    defaultValues: account
+      ? {
+          name: account.name || "",
+          email: account.email || "",
+          phone: account.phone || "",
+          dob: account.dob || "",
+          customerNote: "",
+        }
+      : undefined,
   });
 
   useEffect(() => {
@@ -130,10 +158,15 @@ export function BookingFlow() {
     if (fromUrl) setDiscountCode(fromUrl.trim().toUpperCase());
   }, []);
 
-  // Live-validate the code (debounced). Purely UX — the server re-checks on submit.
+  const selectedOption = option ? bookingOption(option) : null;
+  const usesBanked = !!selectedOption?.usesBankedHours;
+
+  // Live-validate the code (debounced). Purely UX — the server re-checks on
+  // submit. Skipped for banked bookings (codes never combine with hours). Sends
+  // the chosen option so a standard-only reward code can flag the pack.
   useEffect(() => {
     const code = discountCode.trim();
-    if (!code) {
+    if (!code || usesBanked) {
       setDiscountState("idle");
       setDiscountPercent(null);
       return;
@@ -141,13 +174,16 @@ export function BookingFlow() {
     setDiscountState("checking");
     let cancelled = false;
     const t = setTimeout(() => {
-      fetch(`/api/discounts/validate?code=${encodeURIComponent(code)}`)
+      fetch(`/api/discounts/validate?code=${encodeURIComponent(code)}&option=${option ?? ""}`)
         .then((r) => r.json())
-        .then((d: { valid?: boolean; percent?: number }) => {
+        .then((d: { valid?: boolean; percent?: number; reason?: string }) => {
           if (cancelled) return;
           if (d.valid && d.percent) {
             setDiscountState("valid");
             setDiscountPercent(d.percent);
+          } else if (d.reason === "standard_only") {
+            setDiscountState("standard_only");
+            setDiscountPercent(null);
           } else {
             setDiscountState("invalid");
             setDiscountPercent(null);
@@ -164,10 +200,9 @@ export function BookingFlow() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [discountCode]);
+  }, [discountCode, option, usesBanked]);
 
   const tier = FLAT_TIER;
-  const selectedOption = option ? bookingOption(option) : null;
   const duration = selectedOption?.durationHours ?? 0;
   const startSlot = startIdx !== null ? (slots[startIdx] ?? null) : null;
   const endSlot =
@@ -183,17 +218,29 @@ export function BookingFlow() {
     : null;
   const totalLabel = price ? formatNZDPlusGst(price.totalCents) : null;
   // Discount applies to the ex-GST subtotal (mirrors the server); the +GST
-  // display is unchanged. Only reflected when the code has validated.
+  // display is unchanged. Only reflected when the code validated AND this isn't
+  // a banked booking (codes never combine with prepaid hours).
   const discountCents =
-    price && discountState === "valid" && discountPercent
+    !usesBanked && price && discountState === "valid" && discountPercent
       ? Math.round((price.totalCents * discountPercent) / 100)
       : 0;
   const netCents = price ? price.totalCents - discountCents : null;
   const discountLabel = discountCents > 0 ? `−${formatNZDPlusGst(discountCents)}` : null;
-  /** Total-to-pay (net of any discount) with the GST-inclusive amount alongside. */
-  const totalWithGstLabel = netCents != null ? formatNZDPlusGstIncl(netCents) : null;
   const surchargeLabel =
     price && price.surchargeCents > 0 ? `+${formatNZDPlusGst(price.surchargeCents)}` : null;
+
+  // Banked-hours display: the session itself is free; only a group surcharge (if
+  // any) is payable in person.
+  const bankedRemainingAfter =
+    usesBanked && account ? Math.max(0, account.bankedHours - duration) : null;
+  const totalWithGstLabel = usesBanked
+    ? price && price.surchargeCents > 0
+      ? `${formatNZDPlusGstIncl(price.surchargeCents)} · surcharge`
+      : "Covered by banked hours"
+    : netCents != null
+      ? formatNZDPlusGstIncl(netCents)
+      : null;
+
   // Only flagged for the generic 2h option — picking a qualifying weekday
   // start still gets the cheaper rate. The daytime option says it already.
   const dealApplied =
@@ -272,7 +319,8 @@ export function BookingFlow() {
           phone: v.phone,
           dob: v.dob,
           customerNote: v.customerNote || null,
-          discountCode: discountCode.trim() || null,
+          // Banked bookings never carry a discount code.
+          discountCode: usesBanked ? null : discountCode.trim() || null,
           agreeTerms: true,
           marketingOptIn: marketing,
           source: getStoredSource(),
@@ -303,13 +351,29 @@ export function BookingFlow() {
     }
   };
 
-  const timeHint = selectedOption?.isPack
-    ? `You're booking the 10-hour pack (${formatNZD(BULK_PACK.totalCents)}+GST). Choose your first 2-hour session now — we'll sort the rest of your hours with you.`
-    : selectedOption?.weekdayDaytimeOnly
-      ? "Weekday-daytime starts only — your session runs inside 10am–4pm."
-      : duration === 2
-        ? "Pick a start time. Your session runs 2 hours from there."
-        : "Pick a start time.";
+  const timeHint = usesBanked
+    ? `This session uses ${duration} of your ${bankedHours} banked hours${bankedRemainingAfter != null ? ` — ${bankedRemainingAfter} left after` : ""}. Pick a start time.`
+    : selectedOption?.isPack
+      ? `You're booking the 10-hour pack (${formatNZD(BULK_PACK.totalCents)}+GST). Choose your first 2-hour session now — the rest banks to your account.`
+      : selectedOption?.weekdayDaytimeOnly
+        ? "Weekday-daytime starts only — your session runs inside 10am–4pm."
+        : duration === 2
+          ? "Pick a start time. Your session runs 2 hours from there."
+          : "Pick a start time.";
+
+  // Group-step price line.
+  const groupCardPrice = usesBanked
+    ? price && price.surchargeCents > 0
+      ? formatNZDPlusGst(price.surchargeCents)
+      : "Banked hours"
+    : (totalLabel ?? formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents));
+  const groupCardSub = usesBanked
+    ? `${duration}h · banked`
+    : selectedOption?.isPack
+      ? `first ${duration}h now`
+      : duration
+        ? `${duration}h total`
+        : "1h from";
 
   return (
     <div ref={topRef} className="container-page grid gap-12 pb-24 pt-32 md:grid-cols-[1fr_360px] md:gap-16 md:pt-40">
@@ -350,9 +414,14 @@ export function BookingFlow() {
         {step === 1 && (
           <StepShell
             title="Pick your option"
-            hint="One price covers the whole room. Need longer than 2 hours? Email studio@unit20.nz."
+            hint={
+              bankedHours > 0
+                ? `You've got ${bankedHours} banked hours — book with those, or pick a standard option. Need longer than 2 hours? Email studio@unit20.nz.`
+                : "One price covers the whole room. Need longer than 2 hours? Email studio@unit20.nz."
+            }
           >
             <OptionPicker
+              options={availableOptions}
               value={option}
               onChange={pickOption}
               disabledReason={optionDisabledReason}
@@ -388,10 +457,8 @@ export function BookingFlow() {
                 </span>
               </div>
               <p className="mono mt-5 text-2xl text-text">
-                {totalLabel ?? formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents)}
-                <span className="ml-2 font-sans text-meta text-text-muted">
-                  {selectedOption?.isPack ? `first ${duration}h now` : duration ? `${duration}h total` : "1h from"}
-                </span>
+                {groupCardPrice}
+                <span className="ml-2 font-sans text-meta text-text-muted">{groupCardSub}</span>
               </p>
               {dealApplied ? (
                 <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
@@ -400,7 +467,7 @@ export function BookingFlow() {
               ) : null}
               {surchargeLabel ? (
                 <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
-                  {surchargeLabel} group surcharge included
+                  {surchargeLabel} group surcharge{usesBanked ? " · payable in person" : " included"}
                 </p>
               ) : null}
               <GroupSize
@@ -441,12 +508,25 @@ export function BookingFlow() {
                 {
                   label: "Duration",
                   value: selectedOption?.isPack
-                    ? `${duration}h now · ${BULK_PACK.packHours - duration}h to arrange`
+                    ? `${duration}h now · ${BULK_PACK.packHours - duration}h banked`
                     : `${duration}h`,
                 },
                 { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
+                ...(usesBanked
+                  ? [
+                      {
+                        label: "Banked hours",
+                        value: `−${duration}h · ${bankedRemainingAfter ?? 0}h left after`,
+                      },
+                    ]
+                  : []),
                 ...(surchargeLabel
-                  ? [{ label: "Group surcharge", value: `${surchargeLabel} · included` }]
+                  ? [
+                      {
+                        label: "Group surcharge",
+                        value: `${surchargeLabel}${usesBanked ? " · in person" : " · included"}`,
+                      },
+                    ]
                   : []),
                 { label: "Name", value: getValues("name") || "—" },
                 { label: "Email", value: getValues("email") || "—" },
@@ -456,12 +536,14 @@ export function BookingFlow() {
                 { label: "Total", value: totalWithGstLabel ?? "—", accent: true },
               ]}
             />
-            <DiscountField
-              value={discountCode}
-              state={discountState}
-              percent={discountPercent}
-              onChange={setDiscountCode}
-            />
+            {usesBanked ? null : (
+              <DiscountField
+                value={discountCode}
+                state={discountState}
+                percent={discountPercent}
+                onChange={setDiscountCode}
+              />
+            )}
             {selectedOption?.isPack ? (
               <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
             ) : null}
@@ -520,7 +602,7 @@ export function BookingFlow() {
           discountLabel={discountLabel}
           totalLabel={totalWithGstLabel}
           dealNote={dealApplied ? WEEKDAY_DAYTIME_DEAL.label : null}
-          packNote={selectedOption?.isPack ? PACK_SUMMARY_NOTE : null}
+          packNote={selectedOption?.isPack ? PACK_SUMMARY_NOTE : usesBanked ? "Paid with your banked hours." : null}
         />
       </aside>
     </div>

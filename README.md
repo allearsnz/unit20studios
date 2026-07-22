@@ -1,15 +1,14 @@
 # Unit 20
 
-Marketing + booking site for **Unit 20** — a Christchurch DJ practice studio,
-gear-hire house and event venue. The home page is a two-panel hub
-(**Studio / Hire** → this app, **Venue / Events** → the existing unit20.nz site).
-The Studio/Hire experience covers the studio landing, online booking, gear-hire
-SEO pages, and an admin dashboard.
+Marketing + booking site for **Unit 20** — a Christchurch DJ practice studio and
+gear-hire house. The home page (`/`) is the studio landing; the site covers
+online booking, gear-hire SEO pages, and an admin dashboard.
 
-> **Handoff note.** This is intended to be integrated into the existing
-> `unit20.nz` site by that site's developer. The hub links Venue / Events out to
-> `unit20.nz` for now (see `NEXT_PUBLIC_VENUE_URL` / `lib/site.ts`). The whole
-> Studio/Hire app + hub can be mounted into the venue site later.
+> **Scope note.** This site is deliberately studio-only. It is kept separate
+> from the Unit 20 Live shows/ticketing site, which is reached through a single
+> outbound "Live" link in the header and footer (see `NEXT_PUBLIC_LIVE_URL` /
+> `lib/site.ts`). Don't reintroduce copy describing shows, nights or a room for
+> hire — this site talks about the practice studio and gear hire only.
 
 ## Stack
 
@@ -46,7 +45,7 @@ See **`.env.example`** for the full list. Summary:
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_REPLY_TO` | Transactional email |
 | `ADMIN_EMAIL` | The only email allowed into `/admin` |
 | `NEXT_PUBLIC_SITE_URL` | Canonical site origin |
-| `NEXT_PUBLIC_VENUE_URL` | Where the hub's "Venue / Events" panel links (default `https://unit20.nz`) |
+| `NEXT_PUBLIC_LIVE_URL` | Where the "Live" nav/footer link points (default `https://unit20.nz`) |
 | `NEXT_PUBLIC_BUSINESS_PHONE` | Shown in footer/contact (optional) |
 | `NEXT_PUBLIC_PLAUSIBLE_DOMAIN`, `NEXT_PUBLIC_GTM_ID`, `NEXT_PUBLIC_META_PIXEL_ID` | Analytics (each optional) |
 | `CRON_SECRET` | Bearer token checked on `/api/cron/*` |
@@ -59,9 +58,16 @@ See **`.env.example`** for the full list. Summary:
    - `0001_init.sql` — tables, indexes, seed pricing tiers, friendly-id counter
    - `0002_functions.sql` — `create_booking_slot()` (atomic, race-safe booking)
    - `0003_rls.sql` — RLS (public read only for tiers/blackouts; everything else server-side)
+   - `0011_customer_accounts.sql` — customer accounts (auth link), reward
+     bookkeeping columns, `standard_only` on discount codes
+   - `0012_hour_ledger.sql` — banked-hours ledger + `debit_banked_hours()`
 3. **Create the admin user** (post-deploy): in Supabase → Authentication → Users,
    add a user with email = your `ADMIN_EMAIL` and a password. That's the only
-   account that can sign in at `/admin/login`.
+   account that can sign in at `/admin/login` (email + password).
+4. **Email templates**: the *Magic Link* and *Confirm signup* templates must both
+   include `{{ .Token }}` (customer/admin OTP + sign-up codes). Keep
+   `{{ .ConfirmationURL }}` in *Confirm signup* so the crew app is unaffected.
+   See `docs/AUTH.md`.
 
 ## Deployment (Vercel)
 
@@ -76,12 +82,29 @@ See **`.env.example`** for the full list. Summary:
 Hourly + daily, defined in `vercel.json`, all guarded by `CRON_SECRET`:
 
 - `/api/cron/reminders` — 24h-out reminder email, once per confirmed booking
-- `/api/cron/post-session` — 2h after end: marks `completed`, sends follow-up
+- `/api/cron/post-session` — 2h after end: marks `completed`, sends follow-up,
+  and mints any 50%-off play-time reward the customer just earned (every 10h)
 - `/api/cron/cleanup` — daily: deletes `pending_verification` bookings older than 72h
 
 ## Admin guides
 
-All admin lives at **`/admin`** (sign in at `/admin/login` with `ADMIN_EMAIL`).
+All admin lives at **`/admin`** (sign in at `/admin/login` with `ADMIN_EMAIL`
+and its password).
+
+### Customer accounts, banked hours & rewards
+Customers can create an account at **`/account/signup`** (email + password,
+verified by a one-time code) and see their bookings, play time, banked hours and
+rewards at **`/account`**. Past anonymous bookings connect automatically by email.
+
+- **Banked hours** — buying the 10-hour pack banks 10 hours to the account (the
+  first 2h session draws down straight away, leaving 8). Signed-in customers with
+  a balance get "banked" booking options that cost $0 (any 5+ group surcharge is
+  still payable in person). Adjust a balance by hand from the customer page
+  (Banked hours & play time → Apply adjustment).
+- **Rewards** — every 10 hours of *completed* play mints one single-use 50%-off
+  code, valid on standard sessions only (never the 10-hour pack). Minting is
+  idempotent (post-session cron + on manual "completed"), tracked by
+  `customers.rewards_granted_hours`.
 
 ### Verify a new customer
 A first-time customer's booking lands as **Pending** (they must show ID).

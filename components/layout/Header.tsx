@@ -31,8 +31,10 @@ export function Header() {
 
   useEffect(() => setOpen(false), [pathname]);
 
-  const isActive = (href: string) =>
-    href === "/" ? pathname === "/" : pathname.startsWith(href);
+  const isActive = (item: NavLink) => {
+    if (item.activePrefix && pathname.startsWith(item.activePrefix)) return true;
+    return item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+  };
 
   function DesktopLink({ item }: { item: NavLink }) {
     if (item.external) {
@@ -51,10 +53,10 @@ export function Header() {
     return (
       <Link
         href={item.href}
-        aria-current={isActive(item.href) ? "page" : undefined}
+        aria-current={isActive(item) ? "page" : undefined}
         className={cn(
           "link font-mono text-xs uppercase tracking-meta transition-colors",
-          isActive(item.href) ? "text-text" : "text-text-muted hover:text-text",
+          isActive(item) ? "text-text" : "text-text-muted hover:text-text",
         )}
       >
         {item.label}

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
-import { BookingFlow } from "@/components/booking/BookingFlow";
+import { BookingFlow, type BookingAccount } from "@/components/booking/BookingFlow";
+import { getCustomerSession } from "@/lib/customer-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { bankedHoursBalance } from "@/lib/banked-hours";
 
 export const metadata: Metadata = {
   title: "Book a session",
@@ -8,6 +11,31 @@ export const metadata: Metadata = {
   alternates: { canonical: "/studio/book" },
 };
 
-export default function BookPage() {
-  return <BookingFlow />;
+// Dynamic so a signed-in customer's details + banked balance prefill the flow.
+export const dynamic = "force-dynamic";
+
+export default async function BookPage() {
+  const session = await getCustomerSession();
+
+  let account: BookingAccount | null = null;
+  if (session) {
+    const { user, customer } = session;
+    let bankedHours = 0;
+    if (customer) {
+      try {
+        bankedHours = await bankedHoursBalance(createAdminClient(), customer.id);
+      } catch {
+        bankedHours = 0;
+      }
+    }
+    account = {
+      name: customer?.name ?? (user.user_metadata?.name as string | undefined) ?? "",
+      email: customer?.email ?? user.email ?? "",
+      phone: customer?.phone ?? "",
+      dob: customer?.dob ?? "",
+      bankedHours,
+    };
+  }
+
+  return <BookingFlow account={account} />;
 }

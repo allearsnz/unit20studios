@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, Check, Mail } from "lucide-react";
 import { JsonLd } from "@/components/seo/JsonLd";
+import { PhotoBand } from "@/components/ui/PhotoBand";
 import { Section, SectionHeading } from "@/components/ui/Section";
 import { Faq } from "@/components/ui/Faq";
 import { BULK_PACK, FLAT_TIER, WEEKDAY_DAYTIME_DEAL, formatNZDPlusGst } from "@/lib/pricing";
@@ -95,7 +96,7 @@ export default function PricingPage() {
           }),
           faqPageLd(FAQS),
           breadcrumbLd([
-            { name: "Studio", path: "/studio" },
+            { name: "Studio", path: "/" },
             { name: "Pricing", path: "/studio/pricing" },
           ]),
         ]}
@@ -230,7 +231,14 @@ export default function PricingPage() {
         </div>
       </Section>
 
-      <Section className="border-t border-border">
+      <PhotoBand
+        src="/studio.png"
+        alt="Pioneer DJ mixer channel strip lit blue in the Unit 20 booth"
+        eyebrow="What you're paying for"
+        title="One flat rate. The whole room, the whole rig."
+      />
+
+      <Section>
         <SectionHeading eyebrow="Pricing · FAQ" title="The fine print, plainly." />
         <div className="mt-10">
           <Faq items={FAQS} />

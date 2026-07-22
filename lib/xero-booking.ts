@@ -51,6 +51,8 @@ export async function invoiceBooking(bookingId: string): Promise<InvoiceBookingR
       | null;
     if (!booking) return { status: "skipped", reason: "booking_not_found" };
     if (!booking.customer?.email) return { status: "skipped", reason: "no_customer_email" };
+    // Nothing to invoice on a fully banked-hours ($0) session.
+    if (booking.total_price_cents === 0) return { status: "skipped", reason: "zero_total" };
     if (booking.invoice_status && booking.invoice_status !== "not_invoiced") {
       return { status: "skipped", reason: `already_${booking.invoice_status}` };
     }

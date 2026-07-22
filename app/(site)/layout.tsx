@@ -1,7 +1,7 @@
 import { Header } from "@/components/layout/Header";
 import { Footer } from "@/components/layout/Footer";
 
-/** Shell for all marketing/content pages. The hub (app/page.tsx) opts out. */
+/** Shell for all marketing/content pages, including the home page. */
 export default function SiteLayout({
   children,
 }: {

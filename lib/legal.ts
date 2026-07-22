@@ -48,7 +48,7 @@ export const BEFORE_YOU_COME: { title: string; body: string }[] = [
   },
   {
     title: "Who can come",
-    body: "The room takes up to 8 people, and everyone in the room counts. Groups of 5 or more add a flat surcharge — $20+GST on a 1-hour session, $30+GST on 2 hours — added automatically when you book. It's a practice space, not a party venue, so keep numbers to what you booked.",
+    body: "The room takes up to 8 people, and everyone in the room counts. Groups of 5 or more add a flat surcharge — $20+GST on a 1-hour session, $30+GST on 2 hours — added automatically when you book. It's a practice space, not a party space, so keep numbers to what you booked.",
   },
   {
     title: "Sound & hours",

@@ -1,22 +1,25 @@
 "use client";
 
 import {
-  BOOKING_OPTIONS,
   formatNZDPlusGst,
+  type BookingOption,
   type BookingOptionId,
 } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
 
 /**
- * Booking-option cards (1h / 2h / weekday-daytime 2h / 10-hour pack), shown
- * after the date and before the time. Presentational — availability of each
- * option for the chosen day is computed in BookingFlow.
+ * Booking-option cards, shown after the date and before the time. The list is
+ * built in BookingFlow (standard options always; banked-hours options only for
+ * a signed-in account with enough balance). Presentational — per-option
+ * availability for the chosen day is computed by the parent.
  */
 export function OptionPicker({
+  options,
   value,
   onChange,
   disabledReason,
 }: {
+  options: BookingOption[];
   value: BookingOptionId | null;
   onChange: (id: BookingOptionId) => void;
   /** Per-option reason it can't be picked on this day (null = pickable). */
@@ -24,10 +27,13 @@ export function OptionPicker({
 }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Booking option">
-      {BOOKING_OPTIONS.map((opt) => {
+      {options.map((opt) => {
         const reason = disabledReason(opt.id);
         const disabled = reason !== null;
         const selected = value === opt.id;
+        const priceLabel = opt.usesBankedHours
+          ? `${opt.durationHours} banked`
+          : formatNZDPlusGst(opt.baseCents);
         return (
           <button
             key={opt.id}
@@ -54,11 +60,11 @@ export function OptionPicker({
               </span>
               <span
                 className={cn(
-                  "mono text-sm",
+                  "mono whitespace-nowrap text-sm",
                   disabled ? "text-text-dim/40" : selected ? "text-accent" : "text-text-muted",
                 )}
               >
-                {formatNZDPlusGst(opt.baseCents)}
+                {priceLabel}
               </span>
             </span>
             <span

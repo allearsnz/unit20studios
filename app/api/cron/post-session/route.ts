@@ -3,12 +3,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import { authorizeCron } from "@/lib/cron";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmin, sendEmail } from "@/lib/email";
+import { grantMilestoneRewards } from "@/lib/rewards";
 import { site } from "@/lib/site";
 import BookingPostSession from "@/emails/BookingPostSession";
 
 type Row = {
   id: string;
   friendly_id: string;
+  customer_id: string;
   customer: { name: string; email: string } | null;
 };
 
@@ -25,7 +27,7 @@ export async function GET(req: NextRequest) {
 
     const { data } = await supabase
       .from("bookings")
-      .select("id,friendly_id, customer:customers(name,email)")
+      .select("id,friendly_id,customer_id, customer:customers(name,email)")
       .eq("status", "confirmed")
       .is("post_session_sent_at", null)
       .gte("end_time", from)
@@ -50,7 +52,20 @@ export async function GET(req: NextRequest) {
         .eq("id", b.id);
       processed++;
     }
-    return NextResponse.json({ ok: true, found: rows.length, processed });
+
+    // Mint milestone rewards for every customer whose play time just grew.
+    // Idempotent (CAS on rewards_granted_hours) and best-effort per customer.
+    const customerIds = [...new Set(rows.map((b) => b.customer_id).filter(Boolean))];
+    let rewarded = 0;
+    for (const id of customerIds) {
+      try {
+        await grantMilestoneRewards(supabase, id);
+        rewarded++;
+      } catch (e) {
+        console.error("[cron/post-session] reward grant failed", id, e);
+      }
+    }
+    return NextResponse.json({ ok: true, found: rows.length, processed, customers: rewarded });
   } catch (e) {
     console.error("[cron/post-session] failed", e);
     await notifyAdmin("Cron failed — post-session", String(e));

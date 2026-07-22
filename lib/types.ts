@@ -44,8 +44,37 @@ export interface Customer {
   id_verified_at: string | null;
   marketing_opt_in: boolean;
   notes: string | null;
+  // Customer accounts (supabase migration 0011). `auth_user_id` links this row
+  // to a Supabase auth user (null = anonymous customer, no account yet).
+  // `rewards_granted_hours` is the highest 10-hour play-time multiple already
+  // rewarded — the idempotency guard for milestone-reward minting.
+  auth_user_id: string | null;
+  rewards_granted_hours: number;
   created_at: string;
   updated_at: string;
+}
+
+/** Reason an hour-ledger entry was written (supabase migration 0012). */
+export type HourLedgerReason =
+  | "pack_purchase"
+  | "session_used"
+  | "session_refund"
+  | "adjustment";
+
+/**
+ * One append-only banked-hours movement. Balance = sum(delta_hours) for a
+ * customer. Credits (pack_purchase / session_refund / positive adjustment) are
+ * plain service-role inserts; debits (session_used) go through the atomic
+ * `debit_banked_hours` RPC so the balance can never go negative.
+ */
+export interface HourLedgerEntry {
+  id: string;
+  customer_id: string;
+  delta_hours: number;
+  reason: HourLedgerReason;
+  booking_id: string | null;
+  note: string | null;
+  created_at: string;
 }
 
 /** Lifecycle of a discount code (supabase migration 0010 / crew 0058). */
@@ -68,6 +97,10 @@ export interface DiscountCode {
   customer_id: string | null;
   booking_id: string | null;
   note: string | null;
+  // Reward codes (supabase migration 0011): when true the code applies to
+  // standard rates only (1h / 2h / weekday-daytime) and is refused on the
+  // 10-hour pack. Enforced server-side in the booking API + validate route.
+  standard_only: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -87,6 +120,9 @@ export interface Booking {
   // much came off (0 when none applied).
   discount_code_id: string | null;
   discount_amount_cents: number;
+  // Banked hours drawn by this booking (supabase migration 0011). 0 = a normal
+  // cash booking; >0 = a prepaid-pack session that debited the customer's ledger.
+  banked_hours_used: number;
   is_peak: boolean;
   status: BookingStatus;
   payment_method: PaymentMethod;

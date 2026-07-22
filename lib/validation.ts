@@ -43,7 +43,9 @@ export const bookingInputSchema = z.object({
   tierSlug: z.enum(["small"]),
   /** Booking option chosen in the flow. Optional for legacy clients — the
    *  server infers "1h"/"2h" from durationHours when absent. */
-  optionId: z.enum(["1h", "2h", "2h-daytime", "pack10"]).optional(),
+  optionId: z
+    .enum(["1h", "2h", "2h-daytime", "pack10", "banked-1h", "banked-2h"])
+    .optional(),
   groupSize: z.number().int().min(1).max(8),
   name: z.string().trim().min(2, "Tell us your name").max(120),
   email: z.string().trim().toLowerCase().email("Check your email address").max(180),
@@ -65,7 +67,7 @@ export const bookingInputSchema = z.object({
 
 export type BookingInput = z.infer<typeof bookingInputSchema>;
 
-export const CONTACT_SUBJECTS = ["Studio", "Hire", "Venue", "Other"] as const;
+export const CONTACT_SUBJECTS = ["Studio", "Hire", "Other"] as const;
 
 /** Contact form payload. */
 export const contactInputSchema = z.object({

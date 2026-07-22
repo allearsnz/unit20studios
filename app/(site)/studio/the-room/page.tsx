@@ -42,7 +42,7 @@ export default function TheRoomPage() {
     <>
       <JsonLd
         data={breadcrumbLd([
-          { name: "Studio", path: "/studio" },
+          { name: "Studio", path: "/" },
           { name: "The room", path: "/studio/the-room" },
         ])}
       />

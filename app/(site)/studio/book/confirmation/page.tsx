@@ -148,7 +148,7 @@ export default async function ConfirmationPage({
               Add to calendar
             </a>
           ) : null}
-          <Link href="/studio" className="btn btn-secondary">
+          <Link href="/" className="btn btn-secondary">
             Back to the studio
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>

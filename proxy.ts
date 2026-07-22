@@ -2,20 +2,34 @@ import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 /**
- * Guards /admin/* : requires a valid Supabase session whose email matches
- * ADMIN_EMAIL. /admin/login is public. Also refreshes the auth cookie.
- * (Next 16 renamed the convention from `middleware` to `proxy`.)
+ * Guards two authenticated surfaces (and refreshes the auth cookie):
+ *   - /admin/*   — requires a session whose email matches ADMIN_EMAIL.
+ *   - /account/* — requires ANY signed-in session (a customer). The customers-
+ *     row check is done server-side by requireCustomer(); admins may pass
+ *     through harmlessly.
+ * The auth pages for each surface are public. (Next 16 renamed the convention
+ * from `middleware` to `proxy`.)
  */
+const PUBLIC_PATHS = [
+  "/admin/login",
+  "/account/login",
+  "/account/signup",
+  "/account/forgot",
+];
+
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  if (pathname.startsWith("/admin/login")) return NextResponse.next();
+  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
+
+  const isAdmin = pathname.startsWith("/admin");
+  const loginPath = isAdmin ? "/admin/login" : "/account/login";
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase();
 
   if (!url || !anon) {
-    return NextResponse.redirect(new URL("/admin/login?e=config", req.url));
+    return NextResponse.redirect(new URL(`${loginPath}?e=config`, req.url));
   }
 
   let res = NextResponse.next({ request: req });
@@ -34,13 +48,22 @@ export async function proxy(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user || (adminEmail && user.email?.toLowerCase() !== adminEmail)) {
-    return NextResponse.redirect(new URL("/admin/login", req.url));
+  if (isAdmin) {
+    if (!user || (adminEmail && user.email?.toLowerCase() !== adminEmail)) {
+      return NextResponse.redirect(new URL("/admin/login", req.url));
+    }
+  } else {
+    // /account/* — any authenticated user. Preserve where they were headed.
+    if (!user) {
+      const login = new URL("/account/login", req.url);
+      login.searchParams.set("next", pathname);
+      return NextResponse.redirect(login);
+    }
   }
 
   return res;
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/account/:path*"],
 };

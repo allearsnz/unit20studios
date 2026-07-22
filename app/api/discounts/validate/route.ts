@@ -24,6 +24,14 @@ export async function GET(req: NextRequest) {
   }
 
   const result = await validateDiscountCode(supabase, code);
+
+  // Reward codes (standard_only) never apply to the 10-hour pack. Surface it as
+  // a distinct reason so the UI can explain rather than just say "invalid".
+  const option = req.nextUrl.searchParams.get("option");
+  if (result.valid && result.row?.standard_only && option === "pack10") {
+    return NextResponse.json({ valid: false, percent: result.percent, reason: "standard_only" });
+  }
+
   return NextResponse.json({
     valid: result.valid,
     percent: result.percent,
