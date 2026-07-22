@@ -65,8 +65,9 @@ See **`.env.example`** for the full list. Summary:
    add a user with email = your `ADMIN_EMAIL` and a password. That's the only
    account that can sign in at `/admin/login` (email + password).
 4. **Email templates**: the *Magic Link* and *Confirm signup* templates must both
-   include `{{ .Token }}` (customer/admin OTP + sign-up codes). Keep
-   `{{ .ConfirmationURL }}` in *Confirm signup* so the crew app is unaffected.
+   include `{{ .Token }}` (customer/admin OTP + sign-up codes). Both apps are
+   code-based, so the templates can be code-only (drop `{{ .ConfirmationURL }}`);
+   keep the wording neutral since the template set is shared with the crew app.
    See `docs/AUTH.md`.
 
 ## Deployment (Vercel)

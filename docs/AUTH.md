@@ -38,18 +38,27 @@ any auth user, including the admin) or from the Supabase dashboard.
 
 ## Supabase dashboard — one-time setup
 
-- **Email templates** (Authentication → Email Templates):
+- **Email templates** (Authentication → Email Templates). There is ONE shared
+  set for the whole project (one GoTrue instance) — the same templates serve
+  both the studio and the crew app, so keep the wording **neutral** (no crew- or
+  studio-specific "backend" language).
   - *Magic Link* template must include `{{ .Token }}` — the admin/customer OTP
-    flows depend on it. (Already required by the previous admin login.)
+    login + password-reset flows depend on it.
   - *Confirm signup* template must include `{{ .Token }}` so new customers get
-    their 6-digit sign-up code. **Keep `{{ .ConfirmationURL }}` in the template
-    too** so the crew app is unaffected.
-  - Do not otherwise edit shared templates project-wide.
+    their 6-digit sign-up code.
+  - Both apps are code-based (nobody clicks the emailed link), so
+    `{{ .ConfirmationURL }}` / `{{ .SiteURL }}` can be **removed** — a code-only
+    template is fine. (Only keep the URL if some crew flow still confirms an
+    account by clicking the link — verify before stripping it.)
+  - Suggested neutral body: `Your verification code is {{ .Token }} — enter it
+    to continue. If you didn't request this, ignore this email.`
 - **Admin user**: Authentication → Users — ensure the `ADMIN_EMAIL` user exists
   with a password.
 - No Redirect-URL allow-list entries are needed — nothing here uses link-based
   redirects.
 
-Auth is shared with the crew app. Customer sign-ups create rows in the shared
-`auth.users`, but admin/crew access is gated by email/role, so a customer
-account never gains admin access.
+Auth is shared with the crew app: one `auth.users` table and one set of auth
+(code) emails. That is the ONLY shared surface — studio customers can't reach
+crew dashboards/data (gated by domain + `ADMIN_EMAIL`/role), and all rich studio
+mail (welcome, bookings, rewards) is sent separately + Unit-20-branded via Resend
+(`lib/email.ts`), never through GoTrue.
