@@ -263,6 +263,11 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
+    // The booth's CDJs + DJM-A9 are out on a crewed All Ears job that day, so
+    // the DB trigger refused the insert. Its message is written for customers.
+    if (rpcError.hint === "GEAR_BLOCKED") {
+      return NextResponse.json({ error: rpcError.message }, { status: 409 });
+    }
     console.error("[bookings] create_booking_slot failed", rpcError);
     return NextResponse.json({ error: "Could not create the booking." }, { status: 500 });
   }

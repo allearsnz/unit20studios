@@ -28,12 +28,22 @@ const SHOTS = [
     src: "/theroom.webp",
     alt: "Unit 20 booth: four Pioneer CDJ-3000s linked to a DJM-A9 mixer on a black desk",
     contain: false,
+    wide: false,
   },
   {
     label: "Monitoring · QSC K12.2",
     src: "/hire/qsc-k12-2.png",
     alt: "QSC K12.2 powered loudspeaker — the monitoring in the Unit 20 booth",
     contain: true,
+    wide: false,
+  },
+  // Full-width band under the pair — the close-up that used to open the home page.
+  {
+    label: "CDJ-3000 · DJM-A9",
+    src: "/cdjstudio.webp",
+    alt: "Pioneer DJ CDJ-3000 and DJM-A9 mixer in the Unit 20 booth",
+    contain: false,
+    wide: true,
   },
 ];
 
@@ -59,7 +69,9 @@ export default function TheRoomPage() {
           {SHOTS.map((s, i) => (
             <figure
               key={s.label}
-              className={`relative aspect-[4/5] overflow-hidden border border-border bg-bg-elev sm:aspect-auto sm:min-h-[28rem] ${
+              className={`relative aspect-[4/5] overflow-hidden border border-border bg-bg-elev sm:aspect-auto ${
+                s.wide ? "sm:col-span-2 sm:aspect-[21/9] sm:min-h-0" : "sm:min-h-[28rem]"
+              } ${
                 s.contain
                   ? "bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.04),transparent_70%)]"
                   : ""
@@ -70,7 +82,13 @@ export default function TheRoomPage() {
                 alt={s.alt}
                 fill
                 priority={i === 0}
-                sizes={i === 0 ? "(min-width: 640px) 58vw, 100vw" : "(min-width: 640px) 42vw, 100vw"}
+                sizes={
+                  s.wide
+                    ? "100vw"
+                    : i === 0
+                      ? "(min-width: 640px) 58vw, 100vw"
+                      : "(min-width: 640px) 42vw, 100vw"
+                }
                 className={s.contain ? "object-contain p-8 pb-14" : "object-cover"}
               />
               <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-bg/80 to-transparent" aria-hidden />

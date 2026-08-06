@@ -189,8 +189,8 @@ export default function HomePage() {
           </div>
 
           <ParallaxPhoto
-            src="/cdjstudio.webp"
-            alt="Pioneer DJ CDJ-3000 and DJM-A9 mixer in the Unit 20 booth"
+            src="/theroom.webp"
+            alt="Inside the Unit 20 booth: four Pioneer CDJ-3000s and a DJM-A9 mixer"
             priority
             className="relative order-first h-[40vh] md:order-none md:h-[70vh]"
           />

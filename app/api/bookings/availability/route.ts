@@ -27,6 +27,8 @@ export async function GET(req: NextRequest) {
   let bookings: Span[] = [];
   let blackouts: Span[] = [];
   let recurring: RecurRule[] = [];
+  // True when the booth's DJ gear is out on a crewed All Ears job that day.
+  let gearBlocked = false;
   try {
     const supabase = createAdminClient();
     const [b, bl] = await Promise.all([
@@ -55,6 +57,22 @@ export async function GET(req: NextRequest) {
     } catch {
       /* table not present yet — no recurring rules */
     }
+    // Shared-gear block. The CDJs and DJM-A9 in the booth are All Ears rental
+    // stock: when a *crewed* job takes both out, the studio can't run at all
+    // that day (a dry hire of the same gear doesn't block — see the crew repo's
+    // 0101 migration). The DB trigger on `bookings` enforces this regardless of
+    // what the UI shows; this call is what greys the day out up front.
+    // studio_gear_available() blocks whole NZ days, so one call for the whole
+    // day is exact — no need to ask per slot.
+    try {
+      const { data, error } = await supabase.rpc("studio_gear_available", {
+        p_start: dayStartIso,
+        p_end: dayEndIso,
+      });
+      if (!error && data === false) gearBlocked = true;
+    } catch {
+      /* function not present yet — fall back to the trigger catching it */
+    }
   } catch {
     // Supabase not configured (e.g. local dev) — return all slots open.
     console.warn("[availability] Supabase unavailable; returning open slots");
@@ -73,7 +91,7 @@ export async function GET(req: NextRequest) {
     const startMs = start.getTime();
     const endMs = startMs + 3600 * 1000;
 
-    let available = startMs > now;
+    let available = startMs > now && !gearBlocked;
     if (available) {
       for (const bk of bookings) {
         const bs = new Date(bk.start_time).getTime() - BUFFER_MS;
