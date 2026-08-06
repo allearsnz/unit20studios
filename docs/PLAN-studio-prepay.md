@@ -1,34 +1,32 @@
 # PLAN — pay before you book, then the door code issues itself
 
-**Status:** planning doc — nothing here is built yet.
+**Status:** planning doc — nothing here is built yet. Architecture is **decided** (§3).
 **Relationship to [`PLAN-xero-invoicing.md`](PLAN-xero-invoicing.md):** that plan designed
-*invoice-then-pay* (owner approves → invoice emailed → customer pays whenever). Most of it is
-**already built** (see §2). This doc covers the change of shape the new ask implies —
-**payment gates the booking** — and the door-code half.
+*invoice-then-pay* (owner approves → invoice emailed → customer pays whenever) and most of it is
+already built. This doc covers the change of shape the new ask implies — **payment gates the
+booking** — and keeps Xero as the book of record rather than the payment gate.
 
 ---
 
 ## 0. TL;DR
 
-Two things are true and they make this much smaller than it looks:
+**Charge with Stripe Checkout directly. Write the invoice into Xero after the money lands.**
 
-1. **The door-code half is already done.** A trigger on `bookings` fires the moment
-   `payment_status` becomes `'paid'`, enqueues a code for the exact session window, a
-   once-a-minute cron mints it against the studio TTLock, and the function emails it to the
-   customer. Nothing in this plan needs to build that — it needs to *cause* `paid` earlier.
-2. **The Xero invoicing half is already written and switched off.** `invoiceBooking()`,
-   contact lookup, invoice creation with an idempotency key, the online-invoice (pay-now) URL,
-   and the payment webhook all exist. They no-op because five env vars aren't set in Vercel.
+Three things make this smaller than it looks:
 
-So the genuinely new work is one thing: **turn payment from something that happens after a
-booking into the thing that creates it**, plus a hold-and-expire policy for the slot while the
-customer is off paying.
+1. **Door codes are done and proven.** A trigger on `bookings` fires when `payment_status`
+   becomes `'paid'`, queues a code for the exact session window, a per-minute cron mints it
+   against the studio TTLock, and the function emails it. The lock has now been tested working
+   from the crew app — same function, same code path. Nothing to build; it just needs `paid` to
+   happen earlier.
+2. **The Xero write-up is mostly built.** `invoiceBooking()`, contact find-or-create, invoice
+   creation with an idempotency key, and the payment webhook all exist and are dormant for want of
+   env vars. Only one new Xero call is needed: apply a payment to the invoice.
+3. **Everything downstream keys off `payment_status`.** Whatever collects the money, the rest of
+   the system — confirmation email, ICS, access instructions, door code — is already wired.
 
-**Recommendation:** ship the Xero-only version first (§4A) — it is days of work, not weeks,
-because the pieces exist. Move to Stripe Checkout (§4B) only if drop-off proves the hosted-invoice
-detour is costing bookings. **The one hard prerequisite either way is a payment service connected
-to the All Ears Xero org** — without it the pay-now link is a view-only invoice and there is no
-gate at all.
+So the new build is: a Checkout session in front of the booking, a webhook, a hold that expires,
+and one `PUT /Payments` call so Xero shows the invoice settled.
 
 ---
 
@@ -39,12 +37,12 @@ gate at all.
 | Trigger | owner approves a request | customer pays |
 | Booking at creation | held for the owner | held for the payer, with a deadline |
 | Payment | invoice emailed, paid whenever | must clear before the slot is theirs |
-| Unpaid after N | admin gets nagged | **slot is released** |
+| Unpaid after the deadline | admin gets nagged | **slot is released automatically** |
 | Door code | on paid (already) | on paid (already, just sooner) |
 
-The old flow's `pending_verification → confirmed` gate was about *the owner trusting the
-customer*. The new gate is about *money landing*. They're different questions and both can exist:
-prepayment doesn't prove someone is over 18 (§8, Q3).
+The old `pending_verification → confirmed` gate asked *does the owner trust this customer*. The
+new gate asks *has the money landed*. They're different questions and both survive: prepayment
+doesn't prove someone is over 18 (§8, Q4).
 
 ---
 
@@ -52,246 +50,227 @@ prepayment doesn't prove someone is over 18 (§8, Q3).
 
 | Piece | Where | State |
 |---|---|---|
-| Xero token (Custom Connection), contact find-or-create, invoice create, online-invoice URL, `emailInvoice` | `lib/xero.ts` | **written** |
+| Xero token, contact find-or-create, invoice create, online-invoice URL, `emailInvoice` | `lib/xero.ts` | **written** |
 | `invoiceBooking()` — atomic `not_invoiced → creating` claim, rollback on failure, skips $0 and already-invoiced | `lib/xero-booking.ts` | **written** |
-| Admin: invoice on approval + resend action | `app/admin/actions.ts` | **wired** |
 | Xero payment webhook → `payment_status='paid'` | `app/api/webhooks/xero/route.ts` | **written** |
 | `paid` → access-instructions email (idempotent via `access_sent_at`) | `app/api/hooks/booking-paid/route.ts` | **live** |
 | Invoice columns (`xero_invoice_id`, `online_invoice_url`, `invoice_status`, `paid_at`) | `lib/types.ts` + crew migration | **live** |
+| `payment_method = 'stripe'`, `stripe_payment_intent_id` — designed for this, never used | `0001_init.sql` | **live, unused** |
+| Race-safe slot claim | `create_booking_slot()`, studio `0002` | **live** |
 | Cleanup cron already refuses to sweep invoiced bookings | `app/api/cron/cleanup/route.ts` | **live** |
-| **Door codes**: `studio_door_codes` + `paid` trigger + per-minute mint cron + code email | crew `0050`/`0051`/`0054`, `issue-studio-door-code` | **live** |
-| Slot-conflict safety: `create_booking_slot()` is race-safe | studio `0002` | **live** |
-
-Why it's all dormant: `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`, `XERO_TENANT_ID`,
-`XERO_WEBHOOK_KEY`, `XERO_ACCOUNT_CODE` are unset in Vercel, so `invoiceBooking()` returns
-`{status:'skipped', reason:'xero_not_configured'}` on the first line.
+| **Door codes**: `studio_door_codes` + `paid` trigger + per-minute mint cron + code email | crew `0050`/`0051`/`0054`, `issue-studio-door-code` | **live, lock tested working** |
 
 ---
 
-## 3. The one real design decision
+## 3. The decision: Stripe Checkout collects, Xero records
 
-A Xero invoice is an accounting document with a payment link bolted on. A checkout is a funnel
-that ends where you tell it to. Using the first as the second costs you four things:
+Both routes end at the same place — `payment_status='paid'` — so the choice is only about how the
+money is collected. Six things decide it, and they all point the same way.
 
-- **No return URL.** Xero's hosted invoice page has nowhere to send the customer afterwards. They
-  pay, then sit on a Xero page. Our confirmation screen can only say "we'll email you" (or poll).
-- **"Paid" isn't guaranteed at the moment they leave.** The page also offers bank transfer, and
-  partial payment is possible — so a customer can plausibly believe they've booked without the
-  money having cleared.
-- **Nothing holds the slot** — we have to build that ourselves either way, but with a checkout the
-  hold is short and predictable (a session expiry), whereas an invoice invites "I'll pay tonight".
-- **Refunds are a credit note**, not an API call against the original charge.
+**1. You can't test the Xero route.** Xero has **no sandbox for a Custom Connection** — the
+connection is authorised against the live All Ears org, so the first genuine test of the payment
+path involves real money in the real books, and every rehearsal leaves a voided invoice behind.
+Stripe has full test mode, `stripe listen` for local webhook delivery, and webhook replay from the
+dashboard. *You cannot make robust something you cannot rehearse*, and robustness is the
+requirement.
 
-Against that, Xero-only has one enormous advantage: **it is almost entirely built**, it keeps one
-system of record, and reconciliation is automatic because the invoice *is* the accounting entry.
+**2. A Xero invoice has no expiry — and that's the worst failure in the system.** The pay-now link
+lives forever. Customer starts a booking, doesn't pay, the hold lapses, the slot goes to someone
+else — and three days later they open the old email and pay. Money taken, no slot, manual refund,
+angry customer. Stripe makes that structurally impossible: `expires_at` (30 minutes–24 hours),
+`checkout.session.expired` to release the hold, and an `/expire` endpoint to kill a session early.
+Stripe documents this exact pattern for event-ticket inventory, which is precisely this problem.
 
-| | **A. Xero online invoice** | **B. Stripe Checkout** |
-|---|---|---|
-| New code | small — reuse `invoiceBooking()`, redirect instead of email | new checkout route, webhook, refund path, then still create the Xero invoice |
-| Customer journey | leaves site → Xero page → email confirms | leaves site → Stripe → **back to our confirmation page** |
-| Confirmation latency | Xero webhook (seconds, occasionally longer) | `success_url` is immediate; webhook is the backstop |
-| Guarantees payment before slot? | mostly — bank-transfer/partial escape hatches | yes — session is paid or it isn't |
-| Refunds | credit note in Xero | API refund, then credit note in Xero |
-| Extra cost | Custom Connection NZ$10/mo + Stripe fees (via Xero's payment service) | Stripe fees; Xero connection still wanted for the books |
-| Schema | none — `payment_method 'stripe'` and `stripe_payment_intent_id` already exist unused | same columns, finally used |
+**3. Two independent confirmation paths instead of one.** Checkout returns the customer to our
+`success_url`, where we retrieve the session server-side and confirm immediately; the webhook is
+the backstop. The Xero invoice page has nowhere to send them and no way back — the webhook is the
+*only* path, so a single delivery failure means a paid customer with no booking and no door code.
 
-**Recommendation: A first, B when it's earned.** A can be live in days and immediately delivers
-what was asked — money up front, door code automatic. If the hosted-invoice detour visibly costs
-conversions, B is a contained upgrade that reuses everything downstream of `payment_status`.
+**4. "Paid" is unambiguous.** A Checkout session is paid or it isn't. A Xero invoice page also
+offers bank transfer and accepts partial payment, so "they pressed pay" ≠ "money landed" ≠ "the
+slot is theirs".
+
+**5. Refunds are an API call** against the PaymentIntent rather than a credit-note dance.
+Prepayment makes refunds routine, so this stops being a footnote.
+
+**6. It gives *cleaner* books, not messier.** This is the counter-intuitive one. The Xero route
+must create the invoice **before** it knows whether anyone will pay, so every abandoned booking
+leaves an invoice to void — the ledger fills with noise from people who never became customers.
+Collecting first and invoicing after means **Xero only ever sees real bookings**.
+
+Cost is a wash: the same Stripe account, the same fees. The Custom Connection (NZ$10/mo) is still
+wanted, but for writing the books rather than gating the door.
 
 ---
 
 ## 4. Architecture
 
-### 4A. Phase 1 — Xero pay-now gates the booking
-
 ```
 customer completes the form
-  └─ POST /api/bookings  (unchanged: create_booking_slot() takes the slot atomically)
-       status = pending_verification          ← this IS the hold; see below
-       invoice_status = not_invoiced
-  └─ invoiceBooking(id)                        ← existing; now called on CREATE, not approval
-       Xero contact → AUTHORISED invoice (Idempotency-Key: booking:<id>:invoice)
-       store xero_invoice_id, online_invoice_url, invoice_status = 'authorised'
-  └─ respond { payUrl }  → client redirects to the Xero online invoice
-                                    │
-customer pays ──────────────────────┘
-  └─ Xero webhook → payment_status = 'paid', paid_at            (built)
-       ├─ booking-paid hook → status → confirmed, BookingConfirmed + ICS, access email  (built)
-       └─ crew trigger → studio_door_codes row → per-minute cron → TTLock mint → code emailed  (built)
+  └─ POST /api/bookings   (unchanged: create_booking_slot() takes the slot atomically)
+       status = pending_verification, invoice_status = not_invoiced   ← this IS the hold
+  └─ create Stripe Checkout Session
+       expires_at = now + HOLD_MINUTES,  client_reference_id = booking.id
+       idempotency key = booking:<id>:checkout
+       success_url = /studio/book/confirmation?session_id={CHECKOUT_SESSION_ID}
+       cancel_url  = back into the flow
+  └─ respond { checkoutUrl } → redirect
+
+customer pays
+  ├─ success_url → we retrieve the session server-side and show the real outcome  (fast path)
+  └─ webhook checkout.session.completed                                            (truth)
+       └─ mark paid FIRST — payment_method='stripe', stripe_payment_intent_id, payment_status='paid'
+            ├─ booking-paid hook → confirmed + BookingConfirmed + ICS + access email   (built)
+            └─ crew trigger → door code minted → emailed                                (built)
+       └─ THEN write the books (never blocking the customer):
+            invoiceBooking()            → ACCREC invoice, AUTHORISED                    (built)
+            applyInvoicePayment()       → PUT /Payments against the Stripe clearing acct (new)
+                                          → invoice reads PAID in Xero
 
 customer doesn't pay
-  └─ new expiry cron → void invoice, release slot, refund banked hours, release discount code
+  └─ webhook checkout.session.expired → release the slot, credit banked hours back,
+     release any discount code
+  └─ plus a sweep cron, in case that webhook never arrives
 ```
 
-**No new `status` value.** `bookings.status` is a CHECK-constrained text column on the *shared*
-database, and the crew app reads it — widening it is a cross-app change for no gain. A hold is
-already expressible: `status='pending_verification'` **and** `invoice_status='authorised'` **and**
-`payment_status='unpaid'`. Availability already treats `pending_verification` as blocking, so the
-slot is held the moment the row exists. Admin UI reads the pair and shows "awaiting payment".
+### The ordering rule that makes it robust
 
-**Work items**
+**Money → booking → books, in that order, each independent of the next.** Xero being slow, down,
+or misconfigured must never stop a paid customer walking through the door. So the webhook marks
+the booking paid and returns; the Xero write-up is a separate retryable step driven off
+`invoice_status`, exactly the way `invoiceBooking()` already claims and rolls back. A Xero outage
+costs you a delayed ledger entry, not a locked-out customer at 9pm.
 
-1. `app/api/bookings/route.ts` — after `create_booking_slot()` succeeds, call `invoiceBooking()`
-   and return `online_invoice_url` to the client. If Xero is unconfigured or the invoice fails,
-   **fall back to today's pay-in-person behaviour** rather than failing the booking (§8, Q5).
-2. `components/booking/BookingFlow.tsx` — on success with a `payUrl`, send the customer there;
-   without one, the current confirmation page. The Review step's copy ("Payment happens in
-   person") becomes conditional.
-3. `app/(site)/studio/book/confirmation` — a "we're waiting on your payment" state that polls the
-   booking (or just explains the email will arrive), because Xero can't return them here.
-4. **Expiry cron** (new, or a branch of `cleanup`): holds older than `HOLD_MINUTES` and still
-   unpaid → `voidInvoice()`, delete the booking, credit banked hours back (the pattern already
-   exists in `cleanup`), release any redeemed discount code.
-5. `lib/xero.ts` — add `voidInvoice()` (`POST /Invoices/{id}` with `Status: VOIDED`; only legal
-   while no payment is applied).
-6. Email: keep Xero's own invoice email as the fallback receipt, or build a branded
-   `BookingHold` email carrying the pay link — one line either way (§8, Q4).
-7. Guard the cleanup cron so it doesn't race the new expiry sweep.
+### Work items
 
-### 4B. Phase 2 — Stripe Checkout (only if needed)
+1. `lib/stripe.ts` — client, `createCheckoutSession(booking)`, `retrieveSession(id)`,
+   `expireSession(id)`, `refundPayment(paymentIntentId)`. Line items mirror
+   `calcBookingPriceCents` (session + group surcharge), NZD, amounts in cents ex-GST with GST as
+   its own consideration — match whatever `createBookingInvoice()` already emits so the two agree.
+2. `app/api/webhooks/stripe/route.ts` — signature verification against `STRIPE_WEBHOOK_SECRET`,
+   raw body, handles `checkout.session.completed` and `checkout.session.expired`. Idempotent: the
+   paid flip stays guarded by `.neq('payment_status','paid')`, the release is a no-op on an
+   already-paid booking.
+3. `app/api/bookings/route.ts` — after `create_booking_slot()`, create the session and return
+   `checkoutUrl`. If Stripe is unconfigured or errors, **fall back to today's pay-in-person
+   behaviour** rather than losing the booking (§8, Q5).
+4. `components/booking/BookingFlow.tsx` — redirect to `checkoutUrl` when present; the Review
+   step's "Payment happens in person" copy becomes conditional.
+5. `app/(site)/studio/book/confirmation` — read `session_id`, retrieve server-side, show paid /
+   still-processing / expired honestly rather than assuming success.
+6. `lib/xero.ts` — add `applyInvoicePayment(invoiceId, amount, date)`:
+   `PUT /Payments` with `{ Invoice: { InvoiceID }, Account: { AccountID: XERO_STRIPE_ACCOUNT_ID },
+   Date, Amount }`. The account must be a bank account or have `EnablePaymentsToAccount` set —
+   the Stripe clearing account already in use qualifies (§8, Q1).
+7. `lib/xero-booking.ts` — extend to invoice-then-pay in one call for the post-payment path, so an
+   invoice is never left AUTHORISED-but-unpaid when the money is already in.
+8. **Reconciliation cron** (the safety net, both directions):
+   - Stripe sessions paid in the last 24 h whose booking isn't `paid` → repair.
+   - Bookings `paid` with `invoice_status` not `paid` → retry the Xero write-up.
+   - Holds past their deadline still unpaid → expire the session, release the slot.
+9. Refund path in admin, wired to the cancellation policy (§8, Q3), plus a Xero credit note.
 
-Swap step 1's redirect target for a Checkout Session (`success_url` →
-`/studio/book/confirmation?session_id=...`, `cancel_url` back to the flow). On
-`checkout.session.completed`: set `payment_method='stripe'`, `stripe_payment_intent_id`,
-`payment_status='paid'` — and *everything downstream is unchanged*, because it all keys off
-`payment_status`. Then call `invoiceBooking()` **after** payment and apply a Payment to the
-invoice so Xero shows it settled and reconciles against the Stripe payout.
+### Data model
 
-Both existing columns (`payment_method 'stripe'`, `stripe_payment_intent_id`) were designed for
-this and have never been used.
+**No new columns and no new status values.** A hold is already expressible as
+`status='pending_verification'` + `payment_status='unpaid'`, and availability already treats
+`pending_verification` as blocking, so the slot is held the moment the row exists. `payment_method`
+and `stripe_payment_intent_id` exist and finally get used. `bookings.status` is a CHECK-constrained
+column on the **shared** database that the crew app reads — not worth widening for this.
+
+Only config is new: `HOLD_MINUTES` (§8, Q2).
 
 ---
 
-## 5. Door codes — already automatic, but the lock changed
-
-The chain is live and needs no new code:
+## 5. Door codes — done
 
 `payment_status='paid'` → `trg_studio_booking_paid` (SECURITY DEFINER, failure-swallowing so it
-can never roll back the payment) → `studio_door_codes` row `status='pending'` → `pg_cron` every
-minute → `issue-studio-door-code` → TTLock keyboard password for the booking window → code
-emailed to the customer, recorded in `emailed_to`/`emailed_at`.
+can never roll back a payment) → `studio_door_codes` row → per-minute `pg_cron` →
+`issue-studio-door-code` → TTLock keyboard password for the session window → emailed to the
+customer, recorded in `emailed_to`/`emailed_at`.
 
-**The TTLock reset is the live breakage.** Two things are now stale:
-
-1. **`TTLOCK_STUDIO_LOCK_ID`** (a Supabase *edge-function secret*, not a Vercel var) points at a
-   lock id that no longer exists. The function fails with
-   `TTLock studio lock <id> not found on this account`. Fix: list the account's locks and set the
-   new id — **or, if the account now has exactly one lock, unset the secret entirely**: the
-   function already falls back to "the only lock" and that's one fewer thing to drift.
-2. **Existing rows carry dead `ttlock_keyboard_pwd_id`s.** Any code minted against the old lock is
-   gone from the hardware but still reads `active` in the table, and `attempts` may have been
-   burned on failed rows (the cron bounds retries by it). For every future booking, reset the row
-   so the cron re-mints and re-sends:
-
-   ```sql
-   update studio_door_codes
-      set status = 'pending', code = null, ttlock_keyboard_pwd_id = null,
-          attempts = 0, last_error = null, emailed_at = null, emailed_to = null
-    where valid_to > now()
-      and status in ('active', 'failed', 'pending');
-   ```
-
-   Run it *after* the lock id is corrected, or the retries just burn again. Customers with a
-   future booking get a fresh code email; nulling `emailed_at` is what allows the resend.
-
-Do this **before** switching on prepay — otherwise the first prepaid customer is the one who
-discovers the lock is wrong.
+The lock has been tested working from the crew app since the TTLock reset, and studio bookings go
+through the *same* edge function and the same lock — so this half is ready. The only remaining
+check is a live end-to-end once payments switch on: one real booking, paid, and confirm the code
+email lands with the right window.
 
 ---
 
-## 6. Data model
+## 6. Env vars & setup
 
-Phase 1 needs **no new columns and no new status values** — that's the point of using
-`invoice_status` as the hold marker. Only two config values are new:
+**Vercel (`unit20studios`, Production):**
 
-- `HOLD_MINUTES` — how long a slot is held unpaid (proposal: 60; §8, Q1).
-- `XERO_ACCOUNT_CODE` — already referenced by `invoiceBooking()`, still unset.
+| Var | For |
+|---|---|
+| `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | the payment gate |
+| `BOOKING_HOLD_MINUTES` | hold length (§8, Q2) |
+| `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`, `XERO_TENANT_ID`, `XERO_ACCOUNT_CODE` | writing the books |
+| `XERO_STRIPE_ACCOUNT_ID` | the clearing account payments post to (§8, Q1) |
+| `XERO_WEBHOOK_KEY` | only if the manual-invoice path stays (§8, Q6) |
 
-Phase 2 (Stripe) adds nothing either: `payment_method` and `stripe_payment_intent_id` exist.
+**Outside the repo:**
+
+1. Stripe: confirm the All Ears account, get keys, add the webhook endpoint
+   `https://studio.unit20.nz/api/webhooks/stripe` for `checkout.session.completed` and
+   `checkout.session.expired`. Rehearse the whole flow in **test mode** first.
+2. Xero: Custom Connection app, scopes `accounting.transactions` + `accounting.contacts`,
+   authorised against All Ears. Confirm the revenue account code and that GST-on-income is
+   `OUTPUT2` (15%) — the org is NZ/NZD/Pacific-Auckland, so that's expected.
+3. Xero: identify the Stripe clearing account's `AccountID` (§8, Q1).
+
+Note there is **no dependency on Xero for launch**. Steps 1 and the payment gate can ship and take
+money correctly while the Xero write-up follows — the books can even be back-filled by the
+reconciliation cron. That ordering removes the Custom Connection from the critical path.
 
 ---
 
-## 7. Env vars & external setup
+## 7. Robustness checklist
 
-**Vercel (`unit20studios`, Production):** `XERO_CLIENT_ID`, `XERO_CLIENT_SECRET`,
-`XERO_TENANT_ID`, `XERO_WEBHOOK_KEY`, `XERO_ACCOUNT_CODE`, optional
-`XERO_BRANDING_THEME_ID`, new `BOOKING_HOLD_MINUTES`.
-
-**Supabase edge-function secrets:** corrected `TTLOCK_STUDIO_LOCK_ID` (or removed — §5).
-
-**Outside the repo, in order:**
-
-1. **Connect a payment service (Stripe) to the All Ears Xero org and enable "Pay Invoice Online"
-   on the branding theme.** *Nothing else in this plan works without this* — the pay-now link is
-   view-only until it's done, and a view-only invoice is not a gate.
-2. Xero developer portal: Custom Connection app, scopes `accounting.transactions` +
-   `accounting.contacts`, authorised against All Ears (starts the NZ$10/mo add-on).
-3. Webhook → `https://studio.unit20.nz/api/webhooks/xero`, saved **after** the env vars are live
-   so the intent-to-receive handshake passes.
-4. Confirm the revenue account code and that GST-on-income is `OUTPUT2` (15%).
-5. Fix the TTLock lock id and reset stale door-code rows (§5).
-
-You now have the Xero MCP connected locally, which makes steps 4 and the first end-to-end test
-much easier to verify without clicking through the Xero UI.
+- **Idempotency everywhere.** Stripe idempotency key on session create; webhook handlers keyed on
+  session id; the paid flip guarded by `.neq('payment_status','paid')`; `invoiceBooking()` already
+  claims `not_invoiced → creating` atomically. Stripe retries webhooks, so handlers *will* see
+  duplicates.
+- **Signature verification** on the Stripe webhook, over the raw body.
+- **Never trust the redirect.** `success_url` can be opened by hand — always retrieve the session
+  server-side before showing "confirmed".
+- **Reconciliation cron both ways** (§4, item 8) so no single webhook is load-bearing.
+- **Xero decoupled** from the customer's path entirely (§4, ordering rule).
+- **Slot races** already handled by `create_booking_slot()`; two people cannot hold the same hour.
+- **The expiry sweep must re-read `payment_status` in the same statement it releases on**, or it
+  will eventually release a slot someone just paid for.
+- **$0 bookings bypass the gate.** Banked-hours sessions are already $0 and `invoiceBooking()`
+  skips them — they should confirm immediately with no Checkout session at all. The 10-hour pack
+  is a $250 prepay and fits the gate perfectly.
 
 ---
 
 ## 8. Decisions needed before building
 
-1. **Hold length.** How long is a slot held while someone pays? 60 minutes is long enough for a
-   bank transfer to be *started* but not to clear. Shorter (15 min) suits card payment and
-   protects the calendar. Recommendation: **60 min**, and treat bank transfer as "you'll get an
-   email when it lands, the slot may be gone".
-2. **Does prepay replace pay-in-person entirely, or sit alongside it?** Recommendation: prepay
-   becomes the default path and pay-in-person survives as the fallback when Xero is unreachable
-   (§4A item 1) and for admin quick-books.
-3. **Does prepayment skip the ID check?** It shouldn't — money isn't age. Recommendation: paid
-   bookings go straight to `confirmed` (the slot is theirs, the door code issues), and the
-   first-visit ID check stays an on-arrival step rather than a booking gate.
-4. **Whose email carries the pay link** — Xero's invoice email (built, off-brand, second sender)
-   or a branded `BookingHold` email from us? The redirect means the email is only a fallback, so
-   Xero's is defensible for Phase 1.
-5. **If Xero is down at booking time**, do we take the booking as pay-in-person or refuse it?
+1. **Which Xero account do Stripe payments post to?** There's almost certainly a Stripe clearing
+   account already, since Stripe is connected as a payment service. I need its `AccountID` (or its
+   name, and I can find the id). Getting this wrong means the payout won't reconcile.
+2. **Hold length.** Stripe's minimum is 30 minutes. Recommendation: **30** — long enough for a card
+   payment, short enough that a Saturday-night slot isn't dead for an hour.
+3. **Refund policy on customer cancellation.** Full refund up to N hours before, then nothing?
+   This needs to be in the terms *before* the first prepayment, not after — it's the one item here
+   that's a business decision rather than a technical one.
+4. **Does prepayment skip the first-visit ID check?** Recommendation: no. Paid bookings go straight
+   to `confirmed` and the door code issues; the ID check stays an on-arrival step.
+5. **If Stripe is unreachable at booking time**, take the booking as pay-in-person or refuse it?
    Recommendation: take it — a booking you can chase beats a customer who bounced.
-6. **Refund policy on customer cancellation** once prepaid — full refund up to N hours, then
-   nothing? This is a business rule, not a technical one, and it needs to be in the terms before
-   the first prepayment, not after.
-7. **The 10-hour pack** is already a $250 prepay and fits perfectly. **Banked-hours bookings are
-   $0** and `invoiceBooking()` skips them — they should bypass the gate entirely and confirm
-   immediately. Confirm that's intended.
+6. **Keep the Xero webhook and manual-invoice path?** It currently marks a booking paid when an
+   invoice raised by hand in Xero gets paid. Useful for phone bookings and comps; costs nothing to
+   keep. Recommendation: keep.
 
 ---
 
-## 9. Risks
+## 9. Suggested order of work
 
-- **View-only invoice.** If the payment service isn't connected, customers reach a page that can't
-  take money and the booking silently rots. Make step 7.1 a hard gate on shipping.
-- **Webhook is the only confirmation trigger.** If Xero webhook delivery breaks, paid bookings sit
-  unconfirmed and no door code is minted. Mitigation: a daily reconciliation sweep over
-  `invoice_status='authorised'` rows (`GET /Invoices?IDs=…`) — cheap, and the manual "mark paid"
-  admin path already produces every side effect correctly.
-- **Expiry cron deletes a booking someone just paid for.** The sweep must re-read
-  `payment_status` inside the same statement it deletes on, and must never void an invoice with a
-  payment applied (Xero refuses, which is a useful second line of defence).
-- **No Xero sandbox for a live Custom Connection.** First tests hit the real All Ears org — use a
-  $1 invoice and void it.
-- **Double-booking during the hold** is already handled: `create_booking_slot()` takes the slot
-  before the invoice exists, so two people can't hold the same hour.
-- **Shared DB.** Everything here stays inside columns the studio app already owns, except the
-  door-code table, which is the crew app's and needs no change.
-
----
-
-## 10. Suggested order of work
-
-1. Fix the TTLock lock id + reset stale door-code rows (§5). Independent of everything else, and
-   currently broken.
-2. Connect Stripe to the Xero org; enable Pay Invoice Online (§7.1).
-3. Set the five Xero env vars; verify with one $1 invoice end-to-end (invoice → pay → webhook →
-   `paid` → confirmed email → door code minted and emailed). **This alone proves the whole chain
-   without a line of new code.**
-4. Move `invoiceBooking()` from approval to booking creation; return + redirect to the pay link.
-5. Expiry cron + `voidInvoice()`.
-6. Confirmation-page "awaiting payment" state.
-7. Watch drop-off for a few weeks; decide on Stripe Checkout (§4B).
+1. Stripe keys + webhook endpoint; build the gate and rehearse **entirely in test mode** —
+   pay, abandon, expire, refund, replay a duplicate webhook.
+2. Ship the gate with pay-in-person fallback. At this point the money is right and the door codes
+   work; Xero is still manual, exactly as today.
+3. Add the Xero write-up (`invoiceBooking()` + `applyInvoicePayment()`) behind the reconciliation
+   cron, so a failure is a retry rather than an incident.
+4. Back-fill any bookings taken between steps 2 and 3.
+5. Refunds in admin + credit notes.
