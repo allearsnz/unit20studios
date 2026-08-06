@@ -1,4 +1,5 @@
 import { Trash2 } from "lucide-react";
+import { SubmitButton } from "@/components/admin/SubmitButton";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createBlackout,
@@ -182,13 +183,13 @@ export default async function BlackoutsPage() {
                     ) : null}
                   </div>
                   <form action={deleteRecurringBlackout.bind(null, r.id)}>
-                    <button
-                      type="submit"
+                    <SubmitButton
                       aria-label="Delete recurring blackout"
+                      confirm="Delete this recurring blackout? The studio will start taking bookings in that window again."
                       className="flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-danger"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}
@@ -248,13 +249,13 @@ export default async function BlackoutsPage() {
                     {b.reason ? <p className="mt-0.5 text-sm text-text-muted">{b.reason}</p> : null}
                   </div>
                   <form action={deleteBlackout.bind(null, b.id)}>
-                    <button
-                      type="submit"
+                    <SubmitButton
                       aria-label="Delete blackout"
+                      confirm="Delete this blackout? That time becomes bookable again."
                       className="flex h-9 w-9 items-center justify-center text-text-muted transition-colors hover:text-danger"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </SubmitButton>
                   </form>
                 </li>
               ))}

@@ -68,16 +68,13 @@ export default function BookingConfirmed({
       {packNote ? <EmailText>{packNote}</EmailText> : null}
 
       <InfoBlock label="Getting in">
-        Come to {ADDRESS} at your booking time — someone from Unit 20 will meet
-        you there and let you in, so there&apos;s nothing to sort out
-        beforehand.
+        Buzz the roller door at {ADDRESS} and we&apos;ll let you in. If
+        you&apos;ve paid ahead, your door code arrives by email instead.
       </InfoBlock>
 
       <EmailText>
-        Turn up a couple of minutes early. Bring a USB or two with your tracks,
-        your own headphones, and photo ID if it&apos;s your first visit. Need to
-        move it? Reply to this email or write to{" "}
-        <span style={{ color: c.text }}>studio@unit20.nz</span>.
+        Turn up a couple of minutes early. Bring a USB or two with your tracks
+        and your own headphones. Need to move it? Reply to this email.
       </EmailText>
 
       <EmailButton href={manageUrl}>View booking</EmailButton>

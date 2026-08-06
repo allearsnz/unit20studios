@@ -45,7 +45,20 @@ export type BookingAccount = {
   bankedHours: number;
 };
 
-const STEPS = ["Date", "Option", "Time", "Group", "Details", "Terms", "Review"];
+/**
+ * Named so the indices below can never drift apart again. Group used to be a
+ * screen of its own that defaulted to 1 and let you straight through, and Terms
+ * was a screen holding one checkbox — two taps that asked nothing. They now sit
+ * inside Details and Review respectively.
+ *
+ * Order is load-bearing: the slot list is fetched from `date`, so Date must
+ * come before Option (every option card is disabled while `slots` is empty).
+ */
+const STEP = { DATE: 0, OPTION: 1, TIME: 2, DETAILS: 3, REVIEW: 4 } as const;
+
+/** Visual order of the details fields — used to focus the first invalid one. */
+const DETAIL_FIELDS = ["name", "email", "phone", "dob", "customerNote"] as const satisfies readonly (keyof DetailsValues)[];
+const STEPS = ["Date", "Option", "Time", "Details", "Review"];
 
 const PACK_SUMMARY_NOTE = `10-hour pack: this books your first ${BULK_PACK.firstSessionHours} hours — the other ${BULK_PACK.packHours - BULK_PACK.firstSessionHours} bank to your account, and you can draw them down whenever suits.`;
 
@@ -147,7 +160,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const [agreeError, setAgreeError] = useState<string | undefined>();
   const topRef = useRef<HTMLDivElement>(null);
 
-  const { register, formState: { errors }, trigger, getValues } = useForm<DetailsValues>({
+  const { register, formState: { errors }, trigger, getValues, setFocus, getFieldState } = useForm<DetailsValues>({
     resolver: zodResolver(detailsSchema),
     mode: "onBlur",
     defaultValues: account
@@ -182,12 +195,20 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
     };
   }, [date, refreshKey]);
 
-  // Auto-fill the discount code from the ?code= link (from the offer email).
+  // Read the ?code= link (from the offer email) and ?option= (from the pricing
+  // page CTAs — someone who tapped "Book the 10-hour pack" has already chosen,
+  // and making them choose again on step 2 was throwing that away).
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const fromUrl = new URLSearchParams(window.location.search).get("code");
+    const params = new URLSearchParams(window.location.search);
+    const fromUrl = params.get("code");
     if (fromUrl) setDiscountCode(fromUrl.trim().toUpperCase());
-  }, []);
+
+    const wanted = params.get("option");
+    if (wanted && availableOptions.some((o) => o.id === wanted)) {
+      setOption(wanted as BookingOptionId);
+    }
+  }, [availableOptions]);
 
   const selectedOption = option ? bookingOption(option) : null;
   const usesBanked = !!selectedOption?.usesBankedHours;
@@ -277,6 +298,10 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const dealApplied =
     option === "2h" && !!startSlot && isWeekdayDaytime(startSlot.start, 2);
 
+  // A signed-in account has already been ID-verified (that's what unlocks it),
+  // so anyone else is booking for the first time as far as this flow knows.
+  const isFirstBooking = !account;
+
   const dateLabel = date ? civilLabel(date) : null;
   const timeLabel =
     startSlot && endSlot
@@ -290,6 +315,10 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
     if (opt.weekdayDaytimeOnly && !slots.some((s) => s.deal_2h)) return "Mon–Fri only";
     return "No times left this day";
   };
+
+  // Every option unavailable = the day is the problem, not the choice.
+  const dayIsFull =
+    !loadingSlots && slots.length > 0 && availableOptions.every((o) => !optionStartExists(slots, o));
 
   const scrollTop = () => {
     const el = topRef.current;
@@ -317,21 +346,29 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   }, [step]);
 
   const canNext = useMemo(() => {
-    if (step === 0) return !!date;
-    if (step === 1) return !!option;
-    if (step === 2) return startIdx !== null;
-    if (step === 5) return agree;
+    if (step === STEP.DATE) return !!date;
+    if (step === STEP.OPTION) return !!option;
+    if (step === STEP.TIME) return startIdx !== null;
     return true;
-  }, [step, date, option, startIdx, agree]);
+    // `agree` is no longer here: the terms tick now lives on Review, where it
+    // gates submit rather than Continue.
+  }, [step, date, option, startIdx]);
 
   const next = async () => {
-    if (step === 4) {
+    if (step === STEP.DETAILS) {
       const ok = await trigger();
-      if (!ok) return;
-    }
-    if (step === 5 && !agree) {
-      setAgreeError("Please accept the terms to continue.");
-      return;
+      if (!ok) {
+        // RHF validates but does not focus. Without this the button looks
+        // broken: nothing moves, and on a phone the offending field is often
+        // off-screen above the fold.
+        //
+        // Ask for field state rather than reading the `errors` object closed
+        // over from the last render — that one is still empty at this point,
+        // which is why the first version of this silently did nothing.
+        const first = DETAIL_FIELDS.find((f) => getFieldState(f).invalid);
+        if (first) setFocus(first, { shouldSelect: true });
+        return;
+      }
     }
     setAgreeError(undefined);
     setDir(1);
@@ -350,7 +387,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const submit = async () => {
     if (!option || !selectedOption || !startSlot || !date) return;
     if (!agree) {
-      setStep(5);
+      setStep(STEP.REVIEW);
       setAgreeError("Please accept the terms.");
       return;
     }
@@ -385,7 +422,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
         setSubmitting(false);
         if (res.status === 409) {
           setDir(-1);
-          setStep(2);
+          setStep(STEP.TIME);
           setRefreshKey((k) => k + 1);
           // The step effect scrolls once the time picker has rendered.
         } else {
@@ -481,13 +518,13 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
               opacity: { duration: reduce ? 0 : 0.18 },
             }}
           >
-          {step === 0 && (
+          {step === STEP.DATE && (
             <StepShell title="Pick a day" hint={`We open 90 days out. ${WEEKDAY_DAYTIME_DEAL.label}: 2 hours for ${formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}.`}>
               <Calendar value={date} min={min} max={max} onChange={(d) => setDate(d)} />
             </StepShell>
           )}
 
-          {step === 1 && (
+          {step === STEP.OPTION && (
             <StepShell
               title="Pick your option"
               hint={
@@ -496,16 +533,45 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                   : "One price covers the whole room. Need longer than 2 hours? Email studio@unit20.nz."
               }
             >
-              <OptionPicker
-                options={availableOptions}
-                value={option}
-                onChange={pickOption}
-                disabledReason={optionDisabledReason}
-              />
+              {dayIsFull ? (
+                <div className="card p-7">
+                  <h3 className="font-display text-h3 font-semibold text-text">
+                    {dateLabel} is fully booked.
+                  </h3>
+                  <p className="lead mt-3 text-sm text-pretty">
+                    Nothing left on that day — either the room is taken or the
+                    decks are out on a job. Pick another day and you&apos;re
+                    away.
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDir(-1);
+                        setStep(STEP.DATE);
+                      }}
+                      className="btn btn-primary"
+                    >
+                      <ArrowLeft className="h-4 w-4" aria-hidden />
+                      Pick another day
+                    </button>
+                    <a href="/contact?subject=Studio" className="btn btn-secondary">
+                      Ask us about it
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <OptionPicker
+                  options={availableOptions}
+                  value={option}
+                  onChange={pickOption}
+                  disabledReason={optionDisabledReason}
+                />
+              )}
             </StepShell>
           )}
 
-          {step === 2 && (
+          {step === STEP.TIME && (
             <StepShell title="Pick your time" hint={timeHint}>
               <SlotPicker
                 slots={slots}
@@ -518,10 +584,10 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
             </StepShell>
           )}
 
-          {step === 3 && (
+          {step === STEP.DETAILS && (
             <StepShell
-              title="Your group"
-              hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. Groups of ${GROUP_SURCHARGE.threshold + 1}+ add ${formatNZD(GROUP_SURCHARGE.oneHourCents)}+GST (1 hour) or ${formatNZD(GROUP_SURCHARGE.twoHourCents)}+GST (2 hours) — added to your total automatically.`}
+              title="Your details"
+              hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. Groups of ${GROUP_SURCHARGE.threshold + 1}+ add ${formatNZD(GROUP_SURCHARGE.oneHourCents)}+GST (1 hour) or ${formatNZD(GROUP_SURCHARGE.twoHourCents)}+GST (2 hours), added automatically.`}
             >
               <div className="card p-7">
                 <div className="flex items-baseline justify-between">
@@ -553,29 +619,22 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                   onChange={setGroupSize}
                 />
               </div>
+
+              <div className="mt-6">
+                <DetailsForm register={register} errors={errors} />
+              </div>
             </StepShell>
           )}
 
-          {step === 4 && (
-            <StepShell title="Your details" hint="First booking needs a quick ID check on arrival.">
-              <DetailsForm register={register} errors={errors} />
-            </StepShell>
-          )}
-
-          {step === 5 && (
-            <StepShell title="The terms" hint="Two minutes. Then you're booking.">
-              <TermsAccordion
-                agree={agree}
-                marketing={marketing}
-                onAgree={setAgree}
-                onMarketing={setMarketing}
-                error={agreeError}
-              />
-            </StepShell>
-          )}
-
-          {step === 6 && (
-            <StepShell title="Review & book" hint="Last look. Payment happens in person.">
+          {step === STEP.REVIEW && (
+            <StepShell
+              title="Review & book"
+              hint={
+                isFirstBooking
+                  ? "Last look. We'll hold this slot and confirm once your ID checks out. Payment happens in person."
+                  : "Last look. Payment happens in person."
+              }
+            >
               <ReviewList
                 rows={[
                   { label: "Date", value: dateLabel ?? "—" },
@@ -623,6 +682,16 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
               {selectedOption?.isPack ? (
                 <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
               ) : null}
+
+              <div className="mt-8 border-t border-border pt-8">
+                <TermsAccordion
+                  agree={agree}
+                  marketing={marketing}
+                  onAgree={setAgree}
+                  onMarketing={setMarketing}
+                  error={agreeError}
+                />
+              </div>
             </StepShell>
           )}
           </motion.div>
@@ -660,7 +729,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                 </>
               ) : (
                 <>
-                  Confirm booking
+                  {isFirstBooking ? "Request this session" : "Confirm booking"}
                   <ArrowRight className="h-4 w-4" aria-hidden />
                 </>
               )}

@@ -138,6 +138,13 @@ export async function sendAccessInstructions(bookingId: string): Promise<AccessS
     return { status: "no_email", friendlyId: booking.friendly_id };
   }
 
+  // Does a door code actually exist for this booking? The crew-side trigger
+  // (crew migration 0050) only enqueues one when the payment lands while
+  // `end_time > now()` — so a session reconciled after the fact never gets a
+  // code, and promising one would leave someone at a keypad with nothing to
+  // type. This mirrors that condition exactly rather than guessing.
+  const hasDoorCode = new Date(booking.end_time).getTime() > Date.now();
+
   const firstName = booking.customer?.name?.split(/\s+/)[0] || "there";
   const result = await sendEmail({
     to: email,
@@ -146,6 +153,7 @@ export async function sendAccessInstructions(bookingId: string): Promise<AccessS
       firstName,
       friendlyId: booking.friendly_id,
       whenLabel: formatBookingWhen(booking.start_time, booking.end_time),
+      hasDoorCode,
     }),
   });
 

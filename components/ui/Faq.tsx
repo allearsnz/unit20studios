@@ -17,11 +17,11 @@ export function Faq({ items }: { items: FaqItem[] }) {
         >
           <Accordion.Header>
             <Accordion.Trigger className="group flex w-full items-center justify-between gap-6 py-5 text-left">
-              <span className="font-display text-h3 font-semibold text-text">
+              <span className="font-display text-h3 font-semibold text-text transition-colors group-hover:text-accent">
                 {it.q}
               </span>
               <Plus
-                className="h-5 w-5 shrink-0 text-accent transition-transform duration-300 group-data-[state=open]:rotate-45"
+                className="h-5 w-5 shrink-0 text-accent transition-transform group-hover:rotate-90 group-data-[state=open]:rotate-45"
                 aria-hidden
               />
             </Accordion.Trigger>

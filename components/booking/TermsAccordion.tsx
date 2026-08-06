@@ -24,9 +24,11 @@ export function TermsAccordion({
           <Accordion.Item key={t.title} value={`term-${i}`} className="border-b border-border">
             <Accordion.Header>
               <Accordion.Trigger className="group flex w-full items-center justify-between gap-4 py-4 text-left">
-                <span className="font-display text-lg font-semibold text-text">{t.title}</span>
+                <span className="font-display text-lg font-semibold text-text transition-colors group-hover:text-accent">
+                  {t.title}
+                </span>
                 <Plus
-                  className="h-4 w-4 shrink-0 text-accent transition-transform duration-300 group-data-[state=open]:rotate-45"
+                  className="h-4 w-4 shrink-0 text-accent transition-transform group-hover:rotate-90 group-data-[state=open]:rotate-45"
                   aria-hidden
                 />
               </Accordion.Trigger>

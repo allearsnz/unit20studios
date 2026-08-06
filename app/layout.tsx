@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     template: "%s · Unit 20",
   },
   description:
-    "Practice on real club gear and hire production equipment at Unit 20 — Christchurch's underground DJ studio and equipment hire house.",
+    "Practise on real club gear and hire production equipment at Unit 20 — Christchurch's underground DJ studio and equipment hire house.",
   applicationName: "Unit 20",
   openGraph: {
     type: "website",
@@ -67,6 +67,11 @@ export default function RootLayout({
     <html
       lang="en-NZ"
       className={`${supply.variable} ${inter.variable} ${jetbrainsMono.variable} h-full`}
+      // The intro gate stamps `data-intro` here before paint (it has to decide
+      // before the first frame), so this element legitimately differs from the
+      // server HTML at hydration. Suppression is one level deep — children are
+      // still checked normally.
+      suppressHydrationWarning
     >
       <body className="flex min-h-dvh flex-col bg-bg text-text antialiased">
         {/* Preload the logo so the intro overlay's CSS mask paints on first frame */}

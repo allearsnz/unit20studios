@@ -1,23 +1,14 @@
-"use client";
-
-import { motion, useReducedMotion } from "framer-motion";
-
 /**
  * Per-navigation entrance. Re-mounts on every route change, so each page fades
- * in. Opacity-only on purpose — a transform here would create a containing
- * block and break the site's `position: fixed` header/overlays.
+ * in — the remount is what replays the CSS animation.
+ *
+ * Opacity-only on purpose: a transform here would create a containing block and
+ * break the site's `position: fixed` header/overlays.
+ *
+ * Plain CSS rather than Framer Motion, and therefore a server component: this
+ * sits at the app root, so importing an animation library here dragged ~43KB
+ * onto every route in the site to run a single fade.
  */
 export default function Template({ children }: { children: React.ReactNode }) {
-  const reduce = useReducedMotion();
-  if (reduce) return <>{children}</>;
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-    >
-      {children}
-    </motion.div>
-  );
+  return <div className="page-enter">{children}</div>;
 }

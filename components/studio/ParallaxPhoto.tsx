@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useEffect, useRef } from "react";
-import { useReducedMotion } from "framer-motion";
 
 /**
  * Mouse-driven 3D parallax tilt for a hero photo. Replaces what the 3D
@@ -13,6 +12,12 @@ import { useReducedMotion } from "framer-motion";
  *   user reads the headline on the left half too)
  * - Adds a faint accent glow that follows the cursor
  * - Lerps each frame for buttery motion
+ *
+ * Skipped entirely on coarse pointers: there is no cursor to follow on a phone,
+ * so the loop was writing six unchanging custom properties every frame, forever,
+ * on the homepage's LCP element — pure battery cost for no visible effect. It
+ * also parks itself once the lerp converges and restarts on the next move,
+ * rather than running for the lifetime of the page.
  */
 export function ParallaxPhoto({
   src,
@@ -29,23 +34,33 @@ export function ParallaxPhoto({
   const targetRef = useRef({ x: 0, y: 0 });
   const currentRef = useRef({ x: 0, y: 0 });
   const rafRef = useRef<number | null>(null);
-  const reduce = useReducedMotion();
 
   useEffect(() => {
-    if (reduce) return;
+    // matchMedia rather than framer-motion's useReducedMotion: importing an
+    // animation library for one boolean put it on every route's bundle.
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!window.matchMedia("(pointer: fine)").matches) return;
     const wrap = wrapRef.current;
     if (!wrap) return;
+
+    const start = () => {
+      if (rafRef.current === null) rafRef.current = requestAnimationFrame(tick);
+    };
 
     const onMove = (e: PointerEvent) => {
       const x = (e.clientX / window.innerWidth) * 2 - 1; // -1 .. 1
       const y = -((e.clientY / window.innerHeight) * 2 - 1);
       targetRef.current.x = x;
       targetRef.current.y = y;
+      start();
     };
 
+    // On `document`, not `window` — pointerleave on window fires unreliably and
+    // left the tilt stuck off-axis when the cursor exited the viewport.
     const onLeave = () => {
       targetRef.current.x = 0;
       targetRef.current.y = 0;
+      start();
     };
 
     const tick = () => {
@@ -69,19 +84,25 @@ export function ParallaxPhoto({
       wrap.style.setProperty("--tilt-gx", `${gx.toFixed(1)}%`);
       wrap.style.setProperty("--tilt-gy", `${gy.toFixed(1)}%`);
 
+      // Settled — park until the pointer moves again.
+      if (Math.abs(t.x - c.x) < 0.001 && Math.abs(t.y - c.y) < 0.001) {
+        rafRef.current = null;
+        return;
+      }
       rafRef.current = requestAnimationFrame(tick);
     };
 
     window.addEventListener("pointermove", onMove, { passive: true });
-    window.addEventListener("pointerleave", onLeave);
-    rafRef.current = requestAnimationFrame(tick);
+    document.addEventListener("pointerleave", onLeave);
+    start();
 
     return () => {
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerleave", onLeave);
+      document.removeEventListener("pointerleave", onLeave);
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
     };
-  }, [reduce]);
+  }, []);
 
   return (
     <div
@@ -104,7 +125,9 @@ export function ParallaxPhoto({
           transform:
             "rotateX(var(--tilt-rot-x)) rotateY(var(--tilt-rot-y)) translate3d(var(--tilt-tx), var(--tilt-ty), 0)",
           transformStyle: "preserve-3d",
-          transition: reduce ? undefined : "transform 80ms linear",
+          // The global prefers-reduced-motion rule neutralises this, so it
+          // doesn't need a JS branch of its own.
+          transition: "transform 80ms linear",
         }}
       >
         <Image

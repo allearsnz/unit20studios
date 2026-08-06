@@ -96,7 +96,14 @@ export function LoginForm() {
         </div>
 
         <button type="submit" disabled={loading} className="btn btn-primary mt-8 w-full">
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Sign in"}
+          {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Signing in…
+              </>
+            ) : (
+              "Sign in"
+            )}
         </button>
 
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3">

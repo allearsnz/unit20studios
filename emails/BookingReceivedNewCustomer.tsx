@@ -50,9 +50,9 @@ export default function BookingReceivedNewCustomer({
       {packNote ? <EmailText>{packNote}</EmailText> : null}
 
       <InfoBlock label="What happens next">
-        Send us your ID through the link in the other email, and we&apos;ll do
-        the rest — you&apos;ll get a confirmation once you&apos;re verified.
-        Nothing to bring on the day. Questions? Just reply to this email.
+        Send us your ID through the link in the other email and we&apos;ll do
+        the rest — you&apos;ll get a confirmation once you&apos;re verified. On
+        the day, bring a USB with your tracks and your own headphones.
       </InfoBlock>
 
       <EmailButton href={manageUrl}>View request</EmailButton>

@@ -324,7 +324,7 @@ export default async function HireServicePage({
             href="/"
             className="link inline-flex items-center gap-2 font-mono text-meta uppercase tracking-meta text-accent"
           >
-            Looking for the studio? Practice on this gear at Unit 20 Studio
+            Looking for the studio? Practise on this gear at Unit 20 Studio
             <ArrowRight className="size-4" aria-hidden />
           </Link>
           <p className="mt-2 font-mono text-meta uppercase tracking-meta text-text-dim">

@@ -1,4 +1,5 @@
 import { quickBook } from "@/app/admin/actions";
+import { SubmitButton } from "@/components/admin/SubmitButton";
 
 export const dynamic = "force-dynamic";
 
@@ -51,9 +52,9 @@ export default function QuickBookPage() {
         </div>
 
         <div className="sm:col-span-2">
-          <button type="submit" className="btn btn-primary">
+          <SubmitButton busyLabel="Creating…" className="btn btn-primary">
             Create booking
-          </button>
+          </SubmitButton>
         </div>
       </form>
     </div>

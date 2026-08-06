@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUpRight, Menu, X } from "lucide-react";
 import { primaryNav, type NavLink } from "@/lib/site";
 import { cn } from "@/lib/utils";
@@ -13,7 +12,6 @@ export function Header() {
   const pathname = usePathname();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-  const reduce = useReducedMotion();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -99,15 +97,12 @@ export function Header() {
         </button>
       </div>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={reduce ? { opacity: 1 } : { opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={reduce ? { opacity: 1 } : { opacity: 0 }}
-            transition={{ duration: 0.25 }}
-            className="fixed inset-0 z-50 flex flex-col bg-bg md:hidden"
-          >
+      {/* CSS rather than an animation library: this component is in the site
+          layout, so importing one here loaded it on every marketing route to
+          fade a mobile menu. The menu unmounts without an exit animation, which
+          is what it did in practice anyway. */}
+      {open && (
+        <div className="menu-panel fixed inset-0 z-50 flex flex-col bg-bg md:hidden">
             <div className="container-page flex h-16 items-center justify-between">
               <span className="font-mono text-sm font-medium uppercase tracking-meta">Menu</span>
               <button
@@ -125,11 +120,10 @@ export function Header() {
               aria-label="Primary mobile"
             >
               {primaryNav.map((item, i) => (
-                <motion.div
+                <div
                   key={item.href}
-                  initial={reduce ? false : { opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.04 * i + 0.05, duration: 0.4 }}
+                  className="menu-item"
+                  style={{ animationDelay: `${0.04 * i + 0.05}s` }}
                 >
                   {item.external ? (
                     <a
@@ -146,7 +140,7 @@ export function Header() {
                       {item.label}
                     </Link>
                   )}
-                </motion.div>
+                </div>
               ))}
               <Link
                 href="/studio/book"
@@ -155,9 +149,8 @@ export function Header() {
                 Book a session
               </Link>
             </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </header>
   );
 }

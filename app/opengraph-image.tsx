@@ -32,7 +32,7 @@ export default function OpengraphImage() {
             Studio · Hire
           </div>
           <div style={{ fontSize: 30, color: "#8a8580", letterSpacing: -0.5 }}>
-            Practice on real club gear. Christchurch, Aotearoa.
+            Practise on real club gear. Christchurch, Aotearoa.
           </div>
         </div>
       </div>

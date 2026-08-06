@@ -197,7 +197,7 @@ export default function PricingPage() {
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link
-                  href="/studio/book"
+                  href="/studio/book?option=pack10"
                   className="btn btn-primary inline-flex items-center gap-2"
                 >
                   Book the 10-hour pack

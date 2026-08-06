@@ -17,8 +17,7 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
-    // three / drei ship modern ESM; keep optimized package imports tidy
-    optimizePackageImports: ["lucide-react", "@react-three/drei"],
+    optimizePackageImports: ["lucide-react"],
   },
 };
 

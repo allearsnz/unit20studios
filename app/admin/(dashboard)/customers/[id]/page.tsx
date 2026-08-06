@@ -12,6 +12,7 @@ import { formatNZPhone } from "@/lib/validation";
 import { bankedHoursBalance, hourLedgerEntries } from "@/lib/banked-hours";
 import { completedPlayHours } from "@/lib/rewards";
 import { adjustBankedHours } from "@/app/admin/actions";
+import { SubmitButton } from "@/components/admin/SubmitButton";
 import type { Booking, Customer, HourLedgerEntry } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -172,9 +173,12 @@ export default async function CustomerDetailPage({
                 className="input h-10 flex-1"
               />
             </div>
-            <button type="submit" className="btn btn-secondary mt-3 h-10 w-full font-mono text-xs uppercase tracking-meta">
+            <SubmitButton
+              busyLabel="Applying…"
+              className="btn btn-secondary mt-3 h-10 w-full font-mono text-xs uppercase tracking-meta"
+            >
               Apply adjustment
-            </button>
+            </SubmitButton>
           </form>
         </section>
 

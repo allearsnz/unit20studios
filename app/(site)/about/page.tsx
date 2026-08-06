@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 const PILLARS = [
-  { n: "01", t: "The Studio", d: "A proper booth to practice on real club gear, by the hour — day or night.", href: "/" },
+  { n: "01", t: "The Studio", d: "A proper booth to practise on real club gear, by the hour — day or night.", href: "/" },
   { n: "02", t: "Hire", d: "The same gear, out the door and across town for your party, night or event.", href: "/hire" },
   { n: "03", t: "Live", d: "Tickets and line-ups for Unit 20 Live shows.", href: site.liveUrl, external: true },
 ];
@@ -30,7 +30,7 @@ export default function AboutPage() {
           as="h1"
           eyebrow="About"
           title="Built by people who actually play."
-          lead="Unit 20 started from a simple frustration: there was nowhere in Christchurch to practice on the gear you'd actually meet in a club. Bedroom controllers only get you so far. So we built the room we wanted — and opened the doors."
+          lead="There was nowhere in Christchurch to practise on the gear you actually meet in a club. Bedroom controllers only get you so far, so we built the room we wanted."
         />
 
         <div className="mt-10 max-w-2xl space-y-6">
@@ -40,9 +40,8 @@ export default function AboutPage() {
             the city.
           </p>
           <p className="lead text-pretty">
-            No corporate gloss, no per-head upsell, no gatekeeping. Real gear,
-            fair prices, and a room that respects what you&apos;re trying to do —
-            whether that&apos;s a first lesson or a festival rehearsal.
+            No per-head pricing, no gatekeeping. $50+GST an hour buys the whole
+            room — first lesson or festival rehearsal, same rate.
           </p>
         </div>
       </Section>

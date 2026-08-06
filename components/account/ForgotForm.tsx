@@ -109,7 +109,14 @@ export function ForgotForm() {
           </div>
 
           <button type="submit" disabled={loading} className="btn btn-primary mt-8 w-full">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Email me a code"}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Sending…
+              </>
+            ) : (
+              "Email me a code"
+            )}
           </button>
 
           <Link
@@ -168,7 +175,14 @@ export function ForgotForm() {
             disabled={loading || code.length < 6 || password.length < 8}
             className="btn btn-primary mt-8 w-full"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Update password"}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Updating…
+              </>
+            ) : (
+              "Update password"
+            )}
           </button>
 
           <button

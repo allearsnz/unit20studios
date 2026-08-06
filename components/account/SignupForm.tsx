@@ -159,7 +159,14 @@ export function SignupForm() {
             disabled={loading || password.length < 8}
             className="btn btn-primary mt-8 w-full"
           >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Continue"}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Sending…
+              </>
+            ) : (
+              "Continue"
+            )}
           </button>
 
           <p className="mt-6 text-sm text-text-muted">
@@ -199,7 +206,14 @@ export function SignupForm() {
           </div>
 
           <button type="submit" disabled={loading || code.length < 6} className="btn btn-primary mt-8 w-full">
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : "Create account"}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Creating…
+              </>
+            ) : (
+              "Create account"
+            )}
           </button>
 
           <div className="mt-6 flex items-center gap-4">

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Unit 20 — DJ studio & equipment hire",
     description:
-      "Practice on real club gear. Christchurch's DJ studio and equipment hire house.",
+      "Practise on real club gear. Christchurch's DJ studio and equipment hire house.",
     url: "/",
   },
 };
@@ -150,9 +150,8 @@ export default function HomePage() {
               by the hour.
             </h1>
             <p className="lead mt-6 max-w-md">
-              Prep a gig, record a mix or learn the gear. Four CDJ-3000s, a
-              club mixer and proper monitoring, ready when you are. Show up
-              and play.
+              Prep a gig or record a mix on four CDJ-3000s and a DJM-A9. Same
+              setup every session. Show up and play.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link href="/studio/book" className="btn btn-primary">

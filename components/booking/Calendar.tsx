@@ -54,7 +54,7 @@ export function Calendar({
   };
 
   return (
-    <div className="max-w-sm">
+    <div className="sm:max-w-sm">
       <div className="mb-5 flex items-center justify-between">
         <button
           type="button"
@@ -79,7 +79,7 @@ export function Calendar({
         </button>
       </div>
 
-      <div className="mb-2 grid grid-cols-7 gap-1.5">
+      <div className="mb-2 grid grid-cols-7 gap-1 sm:gap-1.5">
         {WEEKDAYS.map((w) => (
           <span key={w} className="text-center font-mono text-meta uppercase tracking-meta text-text-dim">
             {w}
@@ -87,7 +87,7 @@ export function Calendar({
         ))}
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
         {cells.map((d, i) => {
           if (d === null) return <span key={`e${i}`} />;
           const date = ds(vy, vm, d);
@@ -99,7 +99,12 @@ export function Calendar({
               type="button"
               disabled={disabled}
               aria-pressed={selected}
-              aria-label={date}
+              aria-label={new Date(`${date}T00:00:00Z`).toLocaleDateString("en-NZ", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+                timeZone: "UTC",
+              })}
               onClick={() => onChange(date)}
               className={cn(
                 "flex aspect-square items-center justify-center rounded-sm border text-sm transition-colors",

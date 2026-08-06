@@ -165,7 +165,10 @@ function FilePicker({
       <label
         htmlFor={id}
         className={cn(
+          // The real input is sr-only, so :focus-visible would land on a clipped
+          // 1px box — keyboard users would see nothing. Mirror it onto the label.
           "card card-hover flex cursor-pointer items-center gap-4 p-5",
+          "has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent",
           file && "border-accent",
         )}
       >
