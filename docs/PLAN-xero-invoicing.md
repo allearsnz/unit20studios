@@ -1,6 +1,10 @@
 # PLAN — Xero invoicing for studio bookings
 
-**Status:** planning doc — nothing here is built yet.
+**Status:** Phase 1 is largely **built** (see `lib/xero.ts`, `lib/xero-booking.ts`,
+`app/admin/actions.ts`) and dormant — the Xero env vars aren't set in Vercel.
+**Superseded in shape by:** [`PLAN-studio-prepay.md`](PLAN-studio-prepay.md) — payment now gates
+the booking rather than following an approval. The Xero API research, data model and setup steps
+below all still stand; only the trigger point changes.
 **Supersedes:** `/XERO-TODO.md` (the "manual invoicing for now" note). That file now points here.
 **Scope:** auto-generate invoices in the **All Ears** Xero org for studio bookings, email the
 customer a **pay-now link** (Xero online invoice), confirm the booking automatically when Xero

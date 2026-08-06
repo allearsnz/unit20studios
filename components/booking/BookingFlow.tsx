@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
@@ -85,6 +86,33 @@ declare global {
   }
 }
 
+/** Step cross-fade + scroll run for the same time, so they read as one move. */
+const STEP_MS = 260;
+
+/**
+ * Tween the window scroll ourselves instead of `scrollIntoView({ behavior:
+ * "smooth" })`. The native curve runs on its own clock — noticeably longer than
+ * the step transition — so the page was still travelling after the new step had
+ * settled, which is the drift that read as a stall. This lands with it.
+ */
+function scrollWindowTo(top: number, duration: number) {
+  const from = window.scrollY;
+  const delta = top - from;
+  // A hidden tab never fires rAF, so the tween would never tick — jump instead.
+  if (duration <= 0 || Math.abs(delta) < 2 || document.hidden) {
+    window.scrollTo(0, top);
+    return;
+  }
+  const started = performance.now();
+  const tick = (now: number) => {
+    const p = Math.min(1, (now - started) / duration);
+    // Ease-out quint — the same settle as the site's [0.22, 1, 0.36, 1].
+    window.scrollTo(0, from + delta * (1 - Math.pow(1 - p, 5)));
+    if (p < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
 export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const router = useRouter();
   const min = nzToday();
@@ -98,7 +126,10 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
     return [...BOOKING_OPTIONS, ...banked];
   }, [bankedHours]);
 
+  const reduce = useReducedMotion();
   const [step, setStep] = useState(0);
+  /** Travel direction, so the step transition leans the way you're going. */
+  const [dir, setDir] = useState<1 | -1>(1);
   const [date, setDate] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
@@ -260,8 +291,30 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
     return "No times left this day";
   };
 
-  const scrollTop = () =>
-    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollTop = () => {
+    const el = topRef.current;
+    if (!el) return;
+    const { top } = el.getBoundingClientRect();
+    // Already looking at the top of the flow — scrolling here is what read as a
+    // stall: half a second of animation that goes nowhere.
+    if (top >= -4) return;
+    scrollWindowTo(Math.max(0, window.scrollY + top), reduce ? 0 : STEP_MS);
+  };
+
+  // Scroll on a step change AFTER React has committed the new step. Doing it in
+  // the click handler measured the OUTGOING step's layout, so the browser
+  // started animating toward a target that moved the instant the taller/shorter
+  // step rendered — the stall-then-jump.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!mounted.current) {
+      mounted.current = true;
+      return;
+    }
+    scrollTop();
+    // scrollTop is stable enough for this — it only reads refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const canNext = useMemo(() => {
     if (step === 0) return !!date;
@@ -281,12 +334,12 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
       return;
     }
     setAgreeError(undefined);
+    setDir(1);
     setStep((s) => Math.min(STEPS.length - 1, s + 1));
-    scrollTop();
   };
   const back = () => {
+    setDir(-1);
     setStep((s) => Math.max(0, s - 1));
-    scrollTop();
   };
 
   const pickOption = (id: BookingOptionId) => {
@@ -331,10 +384,13 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
         setSubmitError(data.error || "Something went wrong. Please try again.");
         setSubmitting(false);
         if (res.status === 409) {
+          setDir(-1);
           setStep(2);
           setRefreshKey((k) => k + 1);
+          // The step effect scrolls once the time picker has rendered.
+        } else {
+          scrollTop();
         }
-        scrollTop();
         return;
       }
       if (typeof window !== "undefined" && window.fbq) {
@@ -405,150 +461,173 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
           </div>
         ) : null}
 
-        {step === 0 && (
-          <StepShell title="Pick a day" hint={`We open 90 days out. ${WEEKDAY_DAYTIME_DEAL.label}: 2 hours for ${formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}.`}>
-            <Calendar value={date} min={min} max={max} onChange={(d) => setDate(d)} />
-          </StepShell>
-        )}
-
-        {step === 1 && (
-          <StepShell
-            title="Pick your option"
-            hint={
-              bankedHours > 0
-                ? `You've got ${bankedHours} banked hours — book with those, or pick a standard option. Need longer than 2 hours? Email studio@unit20.nz.`
-                : "One price covers the whole room. Need longer than 2 hours? Email studio@unit20.nz."
-            }
+        {/*
+          Step transition. `popLayout` pulls the outgoing step out of the flow
+          the moment it starts leaving, so the incoming step's height applies
+          straight away — without it the nav below collapses to zero and springs
+          back between steps. The two cross-fade over each other and lean the
+          way you're travelling.
+        */}
+        <div className="relative">
+        <AnimatePresence initial={false} mode="popLayout">
+          <motion.div
+            key={step}
+            initial={reduce ? { opacity: 0 } : { opacity: 0, x: dir * 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={reduce ? { opacity: 0 } : { opacity: 0, x: dir * -20 }}
+            transition={{
+              duration: reduce ? 0 : STEP_MS / 1000,
+              ease: [0.22, 1, 0.36, 1],
+              opacity: { duration: reduce ? 0 : 0.18 },
+            }}
           >
-            <OptionPicker
-              options={availableOptions}
-              value={option}
-              onChange={pickOption}
-              disabledReason={optionDisabledReason}
-            />
-          </StepShell>
-        )}
+          {step === 0 && (
+            <StepShell title="Pick a day" hint={`We open 90 days out. ${WEEKDAY_DAYTIME_DEAL.label}: 2 hours for ${formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}.`}>
+              <Calendar value={date} min={min} max={max} onChange={(d) => setDate(d)} />
+            </StepShell>
+          )}
 
-        {step === 2 && (
-          <StepShell title="Pick your time" hint={timeHint}>
-            <SlotPicker
-              slots={slots}
-              loading={loadingSlots}
-              durationHours={duration || 1}
-              requireDaytime={!!selectedOption?.weekdayDaytimeOnly}
-              selectedIdx={startIdx}
-              onSelect={setStartIdx}
-            />
-          </StepShell>
-        )}
+          {step === 1 && (
+            <StepShell
+              title="Pick your option"
+              hint={
+                bankedHours > 0
+                  ? `You've got ${bankedHours} banked hours — book with those, or pick a standard option. Need longer than 2 hours? Email studio@unit20.nz.`
+                  : "One price covers the whole room. Need longer than 2 hours? Email studio@unit20.nz."
+              }
+            >
+              <OptionPicker
+                options={availableOptions}
+                value={option}
+                onChange={pickOption}
+                disabledReason={optionDisabledReason}
+              />
+            </StepShell>
+          )}
 
-        {step === 3 && (
-          <StepShell
-            title="Your group"
-            hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. Groups of ${GROUP_SURCHARGE.threshold + 1}+ add ${formatNZD(GROUP_SURCHARGE.oneHourCents)}+GST (1 hour) or ${formatNZD(GROUP_SURCHARGE.twoHourCents)}+GST (2 hours) — added to your total automatically.`}
-          >
-            <div className="card p-7">
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-display text-h3 font-semibold text-text">
-                  {selectedOption?.label ?? tier.label}
-                </h3>
-                <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
-                  Whole room
-                </span>
+          {step === 2 && (
+            <StepShell title="Pick your time" hint={timeHint}>
+              <SlotPicker
+                slots={slots}
+                loading={loadingSlots}
+                durationHours={duration || 1}
+                requireDaytime={!!selectedOption?.weekdayDaytimeOnly}
+                selectedIdx={startIdx}
+                onSelect={setStartIdx}
+              />
+            </StepShell>
+          )}
+
+          {step === 3 && (
+            <StepShell
+              title="Your group"
+              hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. Groups of ${GROUP_SURCHARGE.threshold + 1}+ add ${formatNZD(GROUP_SURCHARGE.oneHourCents)}+GST (1 hour) or ${formatNZD(GROUP_SURCHARGE.twoHourCents)}+GST (2 hours) — added to your total automatically.`}
+            >
+              <div className="card p-7">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-display text-h3 font-semibold text-text">
+                    {selectedOption?.label ?? tier.label}
+                  </h3>
+                  <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
+                    Whole room
+                  </span>
+                </div>
+                <p className="mono mt-5 text-2xl text-text">
+                  {groupCardPrice}
+                  <span className="ml-2 font-sans text-meta text-text-muted">{groupCardSub}</span>
+                </p>
+                {dealApplied ? (
+                  <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
+                    {WEEKDAY_DAYTIME_DEAL.label} rate applied
+                  </p>
+                ) : null}
+                {surchargeLabel ? (
+                  <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
+                    {surchargeLabel} group surcharge{usesBanked ? " · payable in person" : " included"}
+                  </p>
+                ) : null}
+                <GroupSize
+                  value={groupSize}
+                  min={1}
+                  max={FLAT_LIMITS.maxGroupSize}
+                  onChange={setGroupSize}
+                />
               </div>
-              <p className="mono mt-5 text-2xl text-text">
-                {groupCardPrice}
-                <span className="ml-2 font-sans text-meta text-text-muted">{groupCardSub}</span>
-              </p>
-              {dealApplied ? (
-                <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
-                  {WEEKDAY_DAYTIME_DEAL.label} rate applied
-                </p>
-              ) : null}
-              {surchargeLabel ? (
-                <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
-                  {surchargeLabel} group surcharge{usesBanked ? " · payable in person" : " included"}
-                </p>
-              ) : null}
-              <GroupSize
-                value={groupSize}
-                min={1}
-                max={FLAT_LIMITS.maxGroupSize}
-                onChange={setGroupSize}
+            </StepShell>
+          )}
+
+          {step === 4 && (
+            <StepShell title="Your details" hint="First booking needs a quick ID check on arrival.">
+              <DetailsForm register={register} errors={errors} />
+            </StepShell>
+          )}
+
+          {step === 5 && (
+            <StepShell title="The terms" hint="Two minutes. Then you're booking.">
+              <TermsAccordion
+                agree={agree}
+                marketing={marketing}
+                onAgree={setAgree}
+                onMarketing={setMarketing}
+                error={agreeError}
               />
-            </div>
-          </StepShell>
-        )}
+            </StepShell>
+          )}
 
-        {step === 4 && (
-          <StepShell title="Your details" hint="First booking needs a quick ID check on arrival.">
-            <DetailsForm register={register} errors={errors} />
-          </StepShell>
-        )}
-
-        {step === 5 && (
-          <StepShell title="The terms" hint="Two minutes. Then you're booking.">
-            <TermsAccordion
-              agree={agree}
-              marketing={marketing}
-              onAgree={setAgree}
-              onMarketing={setMarketing}
-              error={agreeError}
-            />
-          </StepShell>
-        )}
-
-        {step === 6 && (
-          <StepShell title="Review & book" hint="Last look. Payment happens in person.">
-            <ReviewList
-              rows={[
-                { label: "Date", value: dateLabel ?? "—" },
-                { label: "Option", value: selectedOption?.label ?? "—" },
-                { label: "Time", value: timeLabel ?? "—" },
-                {
-                  label: "Duration",
-                  value: selectedOption?.isPack
-                    ? `${duration}h now · ${BULK_PACK.packHours - duration}h banked`
-                    : `${duration}h`,
-                },
-                { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
-                ...(usesBanked
-                  ? [
-                      {
-                        label: "Banked hours",
-                        value: `−${duration}h · ${bankedRemainingAfter ?? 0}h left after`,
-                      },
-                    ]
-                  : []),
-                ...(surchargeLabel
-                  ? [
-                      {
-                        label: "Group surcharge",
-                        value: `${surchargeLabel}${usesBanked ? " · in person" : " · included"}`,
-                      },
-                    ]
-                  : []),
-                { label: "Name", value: getValues("name") || "—" },
-                { label: "Email", value: getValues("email") || "—" },
-                ...(discountLabel
-                  ? [{ label: `Discount${discountPercent ? ` (${discountPercent}%)` : ""}`, value: discountLabel }]
-                  : []),
-                { label: "Total", value: totalWithGstLabel ?? "—", accent: true },
-              ]}
-            />
-            {usesBanked ? null : (
-              <DiscountField
-                value={discountCode}
-                state={discountState}
-                percent={discountPercent}
-                onChange={setDiscountCode}
+          {step === 6 && (
+            <StepShell title="Review & book" hint="Last look. Payment happens in person.">
+              <ReviewList
+                rows={[
+                  { label: "Date", value: dateLabel ?? "—" },
+                  { label: "Option", value: selectedOption?.label ?? "—" },
+                  { label: "Time", value: timeLabel ?? "—" },
+                  {
+                    label: "Duration",
+                    value: selectedOption?.isPack
+                      ? `${duration}h now · ${BULK_PACK.packHours - duration}h banked`
+                      : `${duration}h`,
+                  },
+                  { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
+                  ...(usesBanked
+                    ? [
+                        {
+                          label: "Banked hours",
+                          value: `−${duration}h · ${bankedRemainingAfter ?? 0}h left after`,
+                        },
+                      ]
+                    : []),
+                  ...(surchargeLabel
+                    ? [
+                        {
+                          label: "Group surcharge",
+                          value: `${surchargeLabel}${usesBanked ? " · in person" : " · included"}`,
+                        },
+                      ]
+                    : []),
+                  { label: "Name", value: getValues("name") || "—" },
+                  { label: "Email", value: getValues("email") || "—" },
+                  ...(discountLabel
+                    ? [{ label: `Discount${discountPercent ? ` (${discountPercent}%)` : ""}`, value: discountLabel }]
+                    : []),
+                  { label: "Total", value: totalWithGstLabel ?? "—", accent: true },
+                ]}
               />
-            )}
-            {selectedOption?.isPack ? (
-              <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
-            ) : null}
-          </StepShell>
-        )}
+              {usesBanked ? null : (
+                <DiscountField
+                  value={discountCode}
+                  state={discountState}
+                  percent={discountPercent}
+                  onChange={setDiscountCode}
+                />
+              )}
+              {selectedOption?.isPack ? (
+                <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
+              ) : null}
+            </StepShell>
+          )}
+          </motion.div>
+        </AnimatePresence>
+        </div>
 
         {/* nav */}
         <div className="mt-12 flex items-center justify-between gap-4 border-t border-border pt-8">

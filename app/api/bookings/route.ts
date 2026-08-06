@@ -9,6 +9,7 @@ import {
   BULK_PACK,
   FLAT_LIMITS,
   bookingOption,
+  WEEKDAY_DAYTIME_DEAL,
   calcBookingPriceCents,
   formatNZDPlusGst,
   isWeekdayDaytime,
@@ -381,7 +382,7 @@ export async function POST(req: NextRequest) {
     : option.isPack
       ? `10-hour pack — first ${option.durationHours}h booked`
       : optionId === "2h-daytime" || (optionId === "2h" && baseCents !== tier.peak_2h_price_cents)
-        ? "Weekday daytime (Mon–Fri, 10am–4pm)"
+        ? WEEKDAY_DAYTIME_DEAL.label
         : null;
 
   // Emails must never block booking creation.

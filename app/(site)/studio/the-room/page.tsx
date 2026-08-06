@@ -129,7 +129,7 @@ export default function TheRoomPage() {
         <div className="flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between">
           <SectionHeading
             title="Want to see it in person?"
-            lead="Book a weekday-daytime session for the quietest run — Mon–Fri 10am–4pm, 2 hours for $60+GST — or get in touch for a look around."
+            lead="Book a weekday-daytime session for the quietest run — Mon–Fri 10am–4pm, 2 hours for $60+GST (no sub) — or get in touch for a look around."
           />
           <div className="flex shrink-0 flex-wrap gap-3">
             <Link href="/studio/book" className="btn btn-primary">

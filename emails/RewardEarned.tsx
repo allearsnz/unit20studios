@@ -47,7 +47,7 @@ export default function RewardEarned({
       />
 
       <InfoBlock label="Where it works">
-        Applies to 1-hour, 2-hour and weekday-daytime sessions. Not valid on the 10-hour pack.
+        Applies to 1-hour, 2-hour and weekday-daytime (no sub) sessions. Not valid on the 10-hour pack.
         Tap below and the code&rsquo;s already in — 50% comes off before you confirm.
       </InfoBlock>
 

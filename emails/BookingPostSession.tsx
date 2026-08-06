@@ -25,8 +25,9 @@ export default function BookingPostSession({
       </EmailText>
 
       <InfoBlock label="Off-peak tip">
-        Weekday daytimes (Mon–Fri, 10am–4pm) are the quietest time to really dig
-        in — and two hours then is just $60+GST. Same room, same gear, waiting.
+        Weekday daytimes (Mon–Fri, 10am–4pm, no sub) are the quietest time to
+        really dig in — and two hours then is just $60+GST. Same room, same
+        gear, waiting.
       </InfoBlock>
 
       <EmailButton href={bookUrl}>Book another session</EmailButton>

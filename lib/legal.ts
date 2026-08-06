@@ -52,6 +52,6 @@ export const BEFORE_YOU_COME: { title: string; body: string }[] = [
   },
   {
     title: "Sound & hours",
-    body: "We run 10am til midnight. It's a proper booth so you can push the monitors, but we're good neighbours — late sessions keep it sensible. Weekday daytime (Mon–Fri, 10am–4pm) is the quietest time to really dig in — and 2 hours then is just $60+GST.",
+    body: "We run 10am til midnight. It's a proper booth so you can push the monitors, but we're good neighbours — late sessions keep it sensible. Weekday daytime (Mon–Fri, 10am–4pm, no sub) is the quietest time to really dig in — and 2 hours then is just $60+GST.",
   },
 ];

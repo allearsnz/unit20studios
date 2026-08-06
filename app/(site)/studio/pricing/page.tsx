@@ -12,7 +12,7 @@ import { site } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Studio pricing — $50+GST/hr, $80+GST/2hr",
   description:
-    "Unit 20 studio pricing. $50+GST per hour, $80+GST for two hours — or $60+GST for two hours weekday daytime (Mon–Fri, 10am–4pm). Bulk 10-hour pack at $25+GST/hr.",
+    "Unit 20 studio pricing. $50+GST per hour, $80+GST for two hours — or $60+GST for two hours weekday daytime (Mon–Fri, 10am–4pm, no sub). Bulk 10-hour pack at $25+GST/hr.",
   alternates: { canonical: "/studio/pricing" },
 };
 
@@ -107,7 +107,7 @@ export default function PricingPage() {
           as="h1"
           eyebrow="Studio · Pricing"
           title="Pay as you go, no contracts."
-          lead="One price for the room. Book by the hour and pay on arrival, or buy a bulk pack and save. Weekday daytime (Mon–Fri, 10am–4pm): 2 hours for $60+GST."
+          lead="One price for the room. Book by the hour and pay on arrival, or buy a bulk pack and save. Weekday daytime (Mon–Fri, 10am–4pm, no sub): 2 hours for $60+GST."
         />
 
         <div className="mt-14 grid gap-4 md:grid-cols-2">
@@ -132,15 +132,15 @@ export default function PricingPage() {
                 value={formatNZDPlusGst(FLAT_TIER.peak_2h_price_cents)}
               />
               <PriceRow
-                label="2 hours · weekday daytime"
+                label={`2 hours · weekday daytime ${WEEKDAY_DAYTIME_DEAL.shortNote}`}
                 value={formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}
                 accent
               />
             </ul>
 
             <p className="mt-6 border-t border-border pt-4 font-mono text-meta uppercase tracking-meta text-text-muted">
-              Weekday daytime = Mon–Fri, sessions inside 10am–4pm. All prices
-              +GST. Groups of 5–8 add $20+GST (1h) / $30+GST (2h), added
+              Weekday daytime = Mon–Fri, sessions inside 10am–4pm, no sub. All
+              prices +GST. Groups of 5–8 add $20+GST (1h) / $30+GST (2h), added
               automatically when you book.
             </p>
 

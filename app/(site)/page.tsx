@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     absolute: "Unit 20 — DJ studio & equipment hire · Christchurch",
   },
   description:
-    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 10am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm) two-hour sessions just $60+GST.",
+    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 10am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm, no sub) two-hour sessions just $60+GST.",
   alternates: { canonical: "/" },
   openGraph: {
     title: "Unit 20 — DJ studio & equipment hire",

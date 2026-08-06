@@ -31,7 +31,7 @@ export function BookingSummary({
   discountLabel?: string | null;
   /** Total to pay (net of discount), GST-explicit — e.g. "$80.00 + GST ($92.00)". */
   totalLabel: string | null;
-  /** Set when the weekday-daytime rate applies, e.g. "Weekday daytime (Mon–Fri, 10am–4pm)". */
+  /** Set when the weekday-daytime rate applies — `WEEKDAY_DAYTIME_DEAL.label`. */
   dealNote?: string | null;
   /** Set for 10-hour pack bookings — explains the remaining hours. */
   packNote?: string | null;

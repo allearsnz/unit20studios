@@ -35,7 +35,13 @@ export const WEEKDAY_DAYTIME_DEAL = {
   windowStartHour: 10, // window opens 10:00 NZ
   windowEndHour: 16,   // session must END by 16:00 NZ
   twoHourPriceCents: 6000, // $60+GST / 2 hours
-  label: "Weekday daytime (Mon–Fri, 10am–4pm)",
+  label: "Weekday daytime (Mon–Fri, 10am–4pm, no sub)",
+  /**
+   * Appended wherever the deal is named without the full bracket above (short
+   * option labels, price rows). Keep the two in step: every customer-facing
+   * mention of this rate has to carry the no-sub condition.
+   */
+  shortNote: "(no sub)",
 } as const;
 
 /**
@@ -137,12 +143,12 @@ export const BOOKING_OPTIONS: BookingOption[] = [
   },
   {
     id: "2h-daytime",
-    label: "2 hours · weekday daytime",
+    label: "2 hours · weekday daytime (no sub)",
     durationHours: 2,
     baseCents: WEEKDAY_DAYTIME_DEAL.twoHourPriceCents,
     weekdayDaytimeOnly: true,
     isPack: false,
-    note: "Mon–Fri, sessions inside 10am–4pm.",
+    note: "Mon–Fri, sessions inside 10am–4pm. No sub.",
   },
   {
     id: "pack10",
