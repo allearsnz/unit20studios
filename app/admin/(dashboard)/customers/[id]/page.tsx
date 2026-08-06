@@ -3,7 +3,9 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VerifyCustomerButton } from "@/components/admin/VerifyCustomerButton";
+import { IdVerificationPanel } from "@/components/admin/IdVerificationPanel";
 import { StatusBadge } from "@/components/admin/badges";
+import { type VerificationView, verificationView } from "@/lib/id-verification";
 import { formatNZ } from "@/lib/timezone";
 import { formatNZDPlusGst } from "@/lib/pricing";
 import { formatNZPhone } from "@/lib/validation";
@@ -35,11 +37,13 @@ export default async function CustomerDetailPage({
   let bankedBalance = 0;
   let ledger: HourLedgerEntry[] = [];
   let completedHours = 0;
+  let idView: VerificationView = { state: "none", verification: null, front: null, back: null };
   try {
     const supabase = createAdminClient();
     const { data } = await supabase.from("customers").select("*").eq("id", id).maybeSingle();
     customer = (data as Customer | null) ?? null;
     if (customer) {
+      idView = await verificationView(supabase, customer);
       const [{ data: bks }, balance, entries, played] = await Promise.all([
         supabase
           .from("bookings")
@@ -99,6 +103,11 @@ export default async function CustomerDetailPage({
           <Link href="/admin/quick-book" className="btn btn-secondary mt-6 w-full h-10 font-mono text-xs uppercase tracking-meta">
             Create a booking
           </Link>
+        </section>
+
+        <section className="card h-fit p-6 lg:col-start-1">
+          <h2 className="eyebrow mb-5">ID verification</h2>
+          <IdVerificationPanel customerId={c.id} view={idView} verifiedAt={c.id_verified_at} />
         </section>
 
         <section className="card h-fit p-6 lg:col-start-1">

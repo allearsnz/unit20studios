@@ -15,6 +15,7 @@ import {
   isWeekdayDaytime,
 } from "@/lib/pricing";
 import { sendBookingCreatedEmails } from "@/lib/notifications";
+import { requestIdVerification } from "@/lib/id-verification";
 import { discountAmountCents, validateDiscountCode } from "@/lib/discounts";
 import type { Booking, Customer, PricingTier } from "@/lib/types";
 
@@ -398,6 +399,20 @@ export async function POST(req: NextRequest) {
     });
   } catch (e) {
     console.error("[bookings] email dispatch failed (booking still created)", e);
+  }
+
+  // An unverified customer gets their one-off ID upload link straight away, so
+  // the check is already in motion by the time the admin looks at the booking.
+  // `pending` is exactly "this customer isn't verified", and requestIdVerification
+  // re-checks and never throws — a failure here costs a link, not a booking.
+  if (pending) {
+    const idRequest = await requestIdVerification(customer.id);
+    if (idRequest.status === "failed") {
+      console.error("[bookings] ID verification link not sent", {
+        customerId: customer.id,
+        reason: idRequest.reason,
+      });
+    }
   }
 
   return NextResponse.json({

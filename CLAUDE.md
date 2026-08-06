@@ -108,6 +108,24 @@ cancelled | no_show`. `payment_status`: `unpaid | paid | refunded | comped`.
 A first-time customer's booking lands as pending until an admin marks their ID
 verified; after that their bookings confirm instantly.
 
+**ID verification** (migration `0013`, `lib/id-verification.ts`) — booking while
+unverified auto-emails a one-off upload link (`/verify-id/[token]`); the customer
+sends the front and back of a licence or passport; the admin sees both images on
+the booking and customer pages and approves with the existing "Mark ID-verified".
+Points worth knowing before changing any of it:
+
+- **One row per customer** in `id_verifications`. Re-sending *rotates* the token
+  in place, so the previous link dies — that's deliberate, and it's also how you
+  kill a link that's gone astray. Only the SHA-256 of the token is stored.
+- **Images live in the private `id-documents` bucket**, RLS-denied to everyone;
+  the admin sees them through 5-minute signed URLs minted server-side. There is
+  no unauthenticated read path.
+- **Approving deletes both images.** The check is done and a folder of other
+  people's ID scans is a liability; `customers.id_verified_at` is the record
+  that it happened. Superseded uploads are deleted on re-submission too.
+- `requestIdVerification()` never throws — an email failure must not cost
+  someone their booking. Admins can always resend from either page.
+
 **Banked hours** — the 10-hour pack banks 10 hours to the customer's account (the
 first 2h session draws down immediately, leaving 8). Signed-in customers with a
 balance get $0 "banked" booking options; any 5+ group surcharge is still payable

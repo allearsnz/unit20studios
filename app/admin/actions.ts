@@ -11,6 +11,11 @@ import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
 import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
 import { invoiceBooking } from "@/lib/xero-booking";
+import {
+  type RequestResult,
+  removeStoredDocuments,
+  requestIdVerification,
+} from "@/lib/id-verification";
 import { grantMilestoneRewards } from "@/lib/rewards";
 import { creditBankedHours } from "@/lib/banked-hours";
 import { site } from "@/lib/site";
@@ -24,7 +29,14 @@ import BookingConfirmed from "@/emails/BookingConfirmed";
 import BookingReceivedNewCustomer from "@/emails/BookingReceivedNewCustomer";
 import BookingCancelled from "@/emails/BookingCancelled";
 import DiscountOffer from "@/emails/DiscountOffer";
-import type { Booking, BookingStatus, Customer, PaymentStatus, PricingTier } from "@/lib/types";
+import type {
+  Booking,
+  BookingStatus,
+  Customer,
+  IdVerification,
+  PaymentStatus,
+  PricingTier,
+} from "@/lib/types";
 
 type FullBooking = Booking & { customer: Customer; pricing_tier: PricingTier };
 
@@ -121,6 +133,14 @@ export async function saveInternalNote(id: string, note: string) {
   revalidatePath(`/admin/bookings/${id}`);
 }
 
+/**
+ * Approve a customer's ID. Verification is permanent — every later booking of
+ * theirs confirms straight away.
+ *
+ * The uploaded licence/passport images are deleted at the same time: the check
+ * they existed for is done, and a folder of other people's ID scans is a
+ * liability, not an asset. `id_verified_at` is the record that it happened.
+ */
 export async function verifyCustomer(customerId: string) {
   await assertAdmin();
   const supabase = createAdminClient();
@@ -128,8 +148,37 @@ export async function verifyCustomer(customerId: string) {
     .from("customers")
     .update({ id_verified: true, id_verified_at: new Date().toISOString() })
     .eq("id", customerId);
+
+  const { data } = await supabase
+    .from("id_verifications")
+    .select("id, front_path, back_path")
+    .eq("customer_id", customerId)
+    .maybeSingle();
+  const row = data as Pick<IdVerification, "id" | "front_path" | "back_path"> | null;
+  if (row) {
+    await removeStoredDocuments(supabase, row);
+    await supabase
+      .from("id_verifications")
+      .update({ front_path: null, back_path: null, updated_at: new Date().toISOString() })
+      .eq("id", row.id);
+  }
+
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
+  revalidatePath("/admin");
+}
+
+/**
+ * Send (or re-send) the ID upload link. Rotates the token, so the previous
+ * link stops working — use it for customers who booked before this existed, or
+ * who lost the email.
+ */
+export async function resendIdVerification(customerId: string): Promise<RequestResult> {
+  await assertAdmin();
+  const result = await requestIdVerification(customerId);
+  revalidatePath(`/admin/customers/${customerId}`);
+  revalidatePath("/admin/customers");
+  return result;
 }
 
 /**

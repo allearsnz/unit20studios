@@ -29,9 +29,9 @@ export default function BookingReceivedNewCustomer({
       <EmailHeading>We&apos;ve got your request.</EmailHeading>
       <EmailText>
         Thanks, {firstName}. Since this is your first session, we just need to
-        check your ID before it&apos;s fully confirmed — bring photo ID (driver
-        licence, passport or similar) when you arrive and you&apos;re set.
-        We&apos;ll be in touch shortly to lock it in.
+        check your ID before it&apos;s fully confirmed. There&apos;s a separate
+        email on its way with a link — upload a photo of your driver licence or
+        passport and we&apos;ll take it from there. It&apos;s a one-off.
       </EmailText>
 
       <DetailPanel
@@ -50,9 +50,9 @@ export default function BookingReceivedNewCustomer({
       {packNote ? <EmailText>{packNote}</EmailText> : null}
 
       <InfoBlock label="What happens next">
-        Hold tight — you don&apos;t need to do anything else right now. We
-        review new bookings quickly and you&apos;ll get a confirmation once
-        you&apos;re verified. Questions? Just reply to this email.
+        Send us your ID through the link in the other email, and we&apos;ll do
+        the rest — you&apos;ll get a confirmation once you&apos;re verified.
+        Nothing to bring on the day. Questions? Just reply to this email.
       </InfoBlock>
 
       <EmailButton href={manageUrl}>View request</EmailButton>

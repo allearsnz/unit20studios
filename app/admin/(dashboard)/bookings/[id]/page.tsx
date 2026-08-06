@@ -6,8 +6,9 @@ import { BookingActions } from "@/components/admin/BookingActions";
 import { DiscountOfferControl } from "@/components/admin/DiscountOfferControl";
 import { PaymentControl } from "@/components/admin/PaymentControl";
 import { InternalNote } from "@/components/admin/InternalNote";
-import { VerifyCustomerButton } from "@/components/admin/VerifyCustomerButton";
+import { IdVerificationPanel } from "@/components/admin/IdVerificationPanel";
 import { StatusBadge } from "@/components/admin/badges";
+import { type VerificationView, verificationView } from "@/lib/id-verification";
 import { formatNZ } from "@/lib/timezone";
 import { formatNZDPlusGst, formatNZDPlusGstIncl } from "@/lib/pricing";
 import { formatNZPhone } from "@/lib/validation";
@@ -23,6 +24,7 @@ export default async function BookingDetailPage({
   const { id } = await params;
 
   let booking: BookingWithRelations | null = null;
+  let idView: VerificationView = { state: "none", verification: null, front: null, back: null };
   try {
     const supabase = createAdminClient();
     const { data } = await supabase
@@ -31,6 +33,7 @@ export default async function BookingDetailPage({
       .eq("id", id)
       .maybeSingle();
     booking = (data as BookingWithRelations | null) ?? null;
+    if (booking?.customer) idView = await verificationView(supabase, booking.customer);
   } catch {
     booking = null;
   }
@@ -114,10 +117,11 @@ export default async function BookingDetailPage({
                   ["Marketing", c.marketing_opt_in ? "Opted in" : "No"],
                 ]}
               />
-              <div className="mt-4">
-                <VerifyCustomerButton customerId={c.id} verified={c.id_verified} />
-              </div>
             </div>
+          </Panel>
+
+          <Panel title="ID verification">
+            <IdVerificationPanel customerId={c.id} view={idView} verifiedAt={c.id_verified_at} />
           </Panel>
         </div>
       </div>

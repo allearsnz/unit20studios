@@ -54,6 +54,28 @@ export interface Customer {
   updated_at: string;
 }
 
+/**
+ * A customer's remote ID check (supabase migration 0013). One row per customer;
+ * re-sending rotates `token_hash` in place so only the newest link works.
+ * `front_path`/`back_path` are keys in the private `id-documents` bucket and go
+ * null once the images are deleted (on approval) — `customers.id_verified` is
+ * the lasting record, not this.
+ */
+export type IdVerification = {
+  id: string;
+  customer_id: string;
+  token_hash: string;
+  expires_at: string;
+  front_path: string | null;
+  back_path: string | null;
+  doc_type: "drivers_licence" | "passport" | null;
+  submitted_at: string | null;
+  sent_at: string | null;
+  send_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 /** Reason an hour-ledger entry was written (supabase migration 0012). */
 export type HourLedgerReason =
   | "pack_purchase"
