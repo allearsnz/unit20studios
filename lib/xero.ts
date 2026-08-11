@@ -69,6 +69,17 @@ function xeroCredsConfigured(): boolean {
 }
 
 /**
+ * Can we actually raise an invoice right now? This is the same gate
+ * `invoiceBooking` opens with, exported so the admin's automation checklist can
+ * say "Xero isn't switched on" instead of showing a permanently-stuck row that
+ * everyone learns to ignore. Server-only — it reads env, so never call it from
+ * a client component.
+ */
+export function xeroInvoicingConfigured(): boolean {
+  return xeroCredsConfigured() && Boolean(process.env.XERO_ACCOUNT_CODE);
+}
+
+/**
  * Read + write scope for the Custom Connection. `accounting.transactions`
  * (superset of `.read`) covers reading/creating invoices; `accounting.contacts`
  * covers finding/creating the customer contact. These scopes must ALSO be

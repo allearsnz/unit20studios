@@ -5,6 +5,7 @@ import {
   findOrCreateContact,
   getAccessToken,
   getOnlineInvoiceUrl,
+  xeroInvoicingConfigured,
   type InvoiceBooking,
 } from "./xero";
 import { formatBookingWhen } from "./timezone";
@@ -32,7 +33,9 @@ export type InvoiceBookingResult =
  */
 export async function invoiceBooking(bookingId: string): Promise<InvoiceBookingResult> {
   try {
-    if (!process.env.XERO_CLIENT_ID || !process.env.XERO_ACCOUNT_CODE) {
+    // Same gate the admin's automation checklist reads, so "Xero isn't switched
+    // on" there and "we skipped invoicing" here can never disagree.
+    if (!xeroInvoicingConfigured()) {
       return { status: "skipped", reason: "xero_not_configured" };
     }
 

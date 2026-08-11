@@ -139,6 +139,30 @@ idempotent (post-session cron + manual "completed"), tracked by
 **Booking creation is atomic** — `create_booking_slot()` (migration `0002`) is
 race-safe. Don't hand-roll an insert path around it.
 
+**Marking a booking PAID is what lets the customer in.** It is a send button,
+not a bookkeeping flag, and it fires two separate emails:
+
+- **The door code.** A crew-side trigger (crew `0050`) enqueues a
+  `studio_door_codes` row, the `issue-studio-door-code` edge function mints it
+  against the TTLock and emails it (crew `0054`). It only enqueues when the
+  payment lands while the session is still ahead and the booking isn't
+  cancelled — a session squared up afterwards gets **no** code, deliberately.
+- **The access instructions** (`emails/BookingAccessInstructions.tsx`), sent
+  once via the `access_sent_at` claim in `lib/notifications.ts`.
+
+Both run through `runPaidAutomations()` (`lib/booking-paid.ts`), called from two
+places on purpose: the `/api/hooks/booking-paid` Database Webhook (covers Xero
+and the crew app's Studio tab) and `setPaymentStatus` in `app/admin/actions.ts`
+(so the admin sees a result instead of trusting a webhook configured in the
+Supabase dashboard and invisible from this repo). Running twice is safe.
+
+`lib/automation.ts` derives the per-booking checklist behind the admin
+**Automation** tab. Its rule: every row is a stored timestamp or a stored row —
+never inferred from booking status. Two things are genuinely unobservable and
+are labelled as such rather than faked: whether an email was *delivered* (no
+bounce webhook), and whether the door code was ever typed in (TTLock offline
+passcodes never call back).
+
 ## Layout
 
 ```
@@ -148,7 +172,7 @@ app/api/         bookings, availability, discounts, contact, cron/*, hooks/*, we
 components/      admin/, booking/, studio/, hire/, three/, layout/, ui/, contact/, account/
 lib/             pricing, banked-hours, rewards, discounts, timezone, ics, email, seo, xero, supabase/
 emails/          React Email templates
-supabase/migrations/  0001–0012
+supabase/migrations/  0001–0014 (0009 and 0014 are DO-NOT-RUN mirrors of crew 0057/0124)
 design-system/   MASTER.md (locked)
 ```
 

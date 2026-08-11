@@ -65,6 +65,13 @@ export type AutomationView = {
   steps: AutomationStep[];
   /** The door-code row, if the crew side has one. Surfaced for the code itself. */
   doorCode: StudioDoorCode | null;
+  /**
+   * Whether the session is already over. Computed here, next to the rules that
+   * depend on it, so the "marking paid will email them a door code" warning and
+   * the checklist row that says a code was never issued can never disagree —
+   * and so the page component stays pure (no clock reads during render).
+   */
+  sessionEnded: boolean;
 };
 
 const HOUR = 3600 * 1000;
@@ -100,7 +107,11 @@ export async function automationView(
   const idCheck = (idRes.data as IdVerification | null) ?? null;
   const doorCode = (codeRes.data as StudioDoorCode | null) ?? null;
 
-  return { steps: buildSteps(booking, idCheck, doorCode), doorCode };
+  return {
+    steps: buildSteps(booking, idCheck, doorCode),
+    doorCode,
+    sessionEnded: new Date(booking.end_time).getTime() <= Date.now(),
+  };
 }
 
 /**
@@ -121,9 +132,10 @@ export function buildSteps(
   const paid = b.payment_status === "paid" || b.payment_status === "comped";
   const customerEmail = b.customer?.email ?? null;
 
-  /** Once a booking is cancelled nothing downstream is owed to anyone. */
-  const dead = (detail: string): AutomationStep["state"] => (cancelled ? "na" : ("pending" as const)) && ("pending" as const) && (detail ? "pending" : "pending");
-  void dead; // (kept out of the way — cancellation is handled per-row below)
+  // Cancellation is handled per-row rather than by short-circuiting the whole
+  // list: a cancelled booking may still have genuinely-done steps behind it
+  // (the ID was approved, the invoice was raised), and blanking those would
+  // lose the history of what the customer actually received.
 
   const steps: AutomationStep[] = [];
 

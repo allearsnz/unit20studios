@@ -11,6 +11,8 @@ import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
 import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib/pricing";
 import { normalizeNZPhone } from "@/lib/validation";
 import { invoiceBooking } from "@/lib/xero-booking";
+import { issuePendingDoorCodes, runPaidAutomations } from "@/lib/booking-paid";
+import { sendAccessInstructions, type AccessSendResult } from "@/lib/notifications";
 import {
   type RequestResult,
   removeStoredDocuments,
@@ -118,12 +120,94 @@ export async function setBookingStatus(id: string, status: BookingStatus) {
   revalidatePath("/admin");
 }
 
-export async function setPaymentStatus(id: string, payment_status: PaymentStatus) {
+/**
+ * What marking a booking paid actually did, handed straight back to the button
+ * that did it.
+ *
+ * `sent` is the only outcome that means the customer can get in. Everything
+ * else is a sentence the admin needs to read *now* — not something to discover
+ * three days later when someone is standing outside a locked roller door.
+ */
+export type PaymentUpdateResult = {
+  /** True when this call is what flipped the booking to paid. */
+  triggered: boolean;
+  access?: AccessSendResult["status"];
+  accessError?: string;
+  doorCodeQueued?: boolean;
+};
+
+export async function setPaymentStatus(
+  id: string,
+  payment_status: PaymentStatus,
+): Promise<PaymentUpdateResult> {
   await assertAdmin();
   const supabase = createAdminClient();
+
+  // Claim the transition into 'paid' the same way status changes are claimed:
+  // only the call that actually moves the row runs the automations, so a
+  // double-click can't send twice and re-selecting 'paid' on an already-paid
+  // booking is a no-op rather than a second round of emails.
+  if (payment_status === "paid") {
+    const { data: transitioned } = await supabase
+      .from("bookings")
+      .update({ payment_status, paid_at: new Date().toISOString() })
+      .eq("id", id)
+      .neq("payment_status", "paid")
+      .select("id")
+      .maybeSingle();
+
+    revalidatePath(`/admin/bookings/${id}`);
+    revalidatePath("/admin");
+    if (!transitioned) return { triggered: false };
+
+    // PAYMENT IS THE TRIGGER FOR THE CUSTOMER'S WAY IN. Historically this
+    // happened only via a Supabase Database Webhook → /api/hooks/booking-paid,
+    // configured in the Supabase dashboard and invisible from here: if it was
+    // missing or its secret had drifted, this click sent nothing and said
+    // nothing. Running the same chain in-process means the admin gets an answer
+    // on screen. The webhook stays — it still covers Xero and the crew app —
+    // and running both is safe (the send is claimed atomically).
+    const result = await runPaidAutomations(id);
+    revalidatePath(`/admin/bookings/${id}`);
+    return {
+      triggered: true,
+      access: result.access.status,
+      accessError: "error" in result.access ? result.access.error : undefined,
+      doorCodeQueued: result.doorCodeKicked,
+    };
+  }
+
   await supabase.from("bookings").update({ payment_status }).eq("id", id);
   revalidatePath(`/admin/bookings/${id}`);
   revalidatePath("/admin");
+  return { triggered: false };
+}
+
+/**
+ * Unstick the access-instructions email. Deliberately NOT a "resend": the
+ * sender no-ops when `access_sent_at` is set, so this only ever fires for a
+ * booking where the email genuinely never went. Resending a mail the customer
+ * already has is a different (and rarer) job, and conflating the two would make
+ * the Automation tab's "sent" row untrustworthy.
+ */
+export async function retryAccessEmail(id: string): Promise<AccessSendResult> {
+  await assertAdmin();
+  const result = await sendAccessInstructions(id);
+  revalidatePath(`/admin/bookings/${id}`);
+  return result;
+}
+
+/**
+ * Poke the crew-side minter for a door code that is queued but not yet minted.
+ * This is the same call the paid hook makes, not a new path — and it is the
+ * only one available to this app (per-booking re-issue needs a crew JWT holding
+ * `doorcodes.manage`, which lives in the crew app's Studio → Door codes tab).
+ */
+export async function retryDoorCode(id: string): Promise<{ ok: boolean }> {
+  await assertAdmin();
+  const ok = await issuePendingDoorCodes();
+  revalidatePath(`/admin/bookings/${id}`);
+  return { ok };
 }
 
 export async function saveInternalNote(id: string, note: string) {
@@ -415,7 +499,13 @@ export async function quickBook(formData: FormData) {
   const booking = bookingRow as Booking;
 
   if (markPaid) {
-    await supabase.from("bookings").update({ payment_status: "paid" }).eq("id", booking.id);
+    // Stamp paid_at here too — the Automation tab reads it as "when the money
+    // landed", and a walk-in keyed at the desk is exactly the case where "no
+    // timestamp" would otherwise look like a fault.
+    await supabase
+      .from("bookings")
+      .update({ payment_status: "paid", paid_at: new Date().toISOString() })
+      .eq("id", booking.id);
   }
 
   if (doEmail && rawEmail) {
