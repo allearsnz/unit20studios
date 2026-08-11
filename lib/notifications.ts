@@ -102,8 +102,20 @@ export type AccessSendResult =
  * The caller that wins the claim sends the email; if that send fails the claim
  * is rolled back so a later retry can try again. All other callers no-op.
  *
+ * THE CLAIM IS NOT A RECORD. Rolling `access_sent_at` back on failure is the
+ * right retry behaviour and, on its own, the wrong audit trail: it leaves the
+ * row byte-identical to a booking nobody ever tried to email — and identical
+ * again to one where the paid Database Webhook never fired at all. Three very
+ * different faults (dead webhook / bad address / Resend refusing) all rendered
+ * as one blank, which is exactly why nobody could tell whether a customer had
+ * been let in. So every genuine attempt also stamps `access_last_attempt_at`
+ * (migration 0014 / crew 0124), which is NEVER rolled back, plus the attempt
+ * count and the sender's own error text. The admin panel classifies on those.
+ *
  * This is the ONLY place the access email is sent. It is invoked from the
- * `bookings` "paid" Database Webhook (POST /api/hooks/booking-paid).
+ * `bookings` "paid" Database Webhook (POST /api/hooks/booking-paid) and, so the
+ * admin gets an answer while they are still looking at the screen, directly
+ * from the "mark paid" action via `runPaidAutomations` (lib/booking-paid.ts).
  */
 export async function sendAccessInstructions(bookingId: string): Promise<AccessSendResult> {
   const supabase = createAdminClient();
@@ -119,11 +131,18 @@ export async function sendAccessInstructions(bookingId: string): Promise<AccessS
   if (booking.access_sent_at) return { status: "already_sent", friendlyId: booking.friendly_id };
 
   // Atomically claim the send: stamp only if still unstamped. If no row comes
-  // back, another caller got there first — nothing more to do.
+  // back, another caller got there first — nothing more to do. The attempt
+  // bookkeeping rides along inside the claim, so only the winner counts an
+  // attempt and the read-modify-write on the counter can't race itself.
   const now = new Date().toISOString();
   const { data: claimed } = await supabase
     .from("bookings")
-    .update({ access_sent_at: now })
+    .update({
+      access_sent_at: now,
+      access_last_attempt_at: now,
+      access_send_attempts: (booking.access_send_attempts ?? 0) + 1,
+      access_send_error: null,
+    })
     .eq("id", bookingId)
     .is("access_sent_at", null)
     .select("id")
@@ -133,8 +152,13 @@ export async function sendAccessInstructions(bookingId: string): Promise<AccessS
   const email = booking.customer?.email;
   if (!email) {
     // No address to send to — release the claim so it can be retried once the
-    // customer record is fixed up.
-    await supabase.from("bookings").update({ access_sent_at: null }).eq("id", bookingId);
+    // customer record is fixed up, but keep the attempt stamp and say why.
+    // Without the reason this looks like a transient failure and someone
+    // retries it forever; the fix is on the customer record, not here.
+    await supabase
+      .from("bookings")
+      .update({ access_sent_at: null, access_send_error: "No email address on file" })
+      .eq("id", bookingId);
     return { status: "no_email", friendlyId: booking.friendly_id };
   }
 
@@ -158,9 +182,14 @@ export async function sendAccessInstructions(bookingId: string): Promise<AccessS
   });
 
   if (!result.ok) {
-    // Roll back the claim so the send can be retried (e.g. resend from the crew
-    // tab or a webhook redelivery). sendEmail never throws.
-    await supabase.from("bookings").update({ access_sent_at: null }).eq("id", bookingId);
+    // Roll back the claim so the send can be retried (e.g. the retry button on
+    // the booking's Automation tab, or a webhook redelivery) — but leave the
+    // attempt stamp standing and record why, so the failure is visible instead
+    // of looking like a send that never happened. sendEmail never throws.
+    await supabase
+      .from("bookings")
+      .update({ access_sent_at: null, access_send_error: result.error ?? "send_failed" })
+      .eq("id", bookingId);
     return { status: "send_failed", friendlyId: booking.friendly_id, error: result.error };
   }
 

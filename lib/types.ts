@@ -155,7 +155,18 @@ export interface Booking {
   internal_note: string | null;
   reminder_sent_at: string | null;
   post_session_sent_at: string | null;
+  /** Warning email sent by the cleanup cron before a slot is released (crew 0120). */
+  verification_reminder_at: string | null;
+  // Access-instructions email. `access_sent_at` is the SUCCESS stamp and is
+  // rolled back if the send fails, so on its own it can't tell a failure from a
+  // send nobody ever attempted. The three columns below (migration 0014 / crew
+  // 0124) are the record: `access_last_attempt_at` is never rolled back, so a
+  // paid booking with no attempt stamp means the paid Database Webhook never
+  // fired. See lib/notifications.ts and lib/automation.ts.
   access_sent_at: string | null;
+  access_last_attempt_at: string | null;
+  access_send_error: string | null;
+  access_send_attempts: number;
   // Xero invoicing (supabase migration 0009 / crew 0057).
   xero_invoice_id: string | null;
   online_invoice_url: string | null;
@@ -197,6 +208,40 @@ export interface ContactSubmission {
   source_page: string | null;
   ip_address: string | null;
   created_at: string;
+}
+
+/**
+ * A studio door code — a CREW-OWNED table (crew migrations 0050/0054), read
+ * here but never written. Marking a booking paid fires a crew-side trigger that
+ * INSERTs a `pending` row; the `issue-studio-door-code` edge function mints it
+ * against TTLock, flips it to `active` and emails the code to the customer.
+ *
+ * This is the only honest answer to "did they get their code?", which is why
+ * the admin Automation tab reads it rather than inferring anything from
+ * `payment_status`. Note TTLock passcodes are OFFLINE: the lock never calls
+ * back, so whether the code was actually typed in is not knowable from here.
+ */
+export type StudioDoorCodeStatus =
+  | "pending"
+  | "active"
+  | "superseded"
+  | "revoked"
+  | "expired"
+  | "failed";
+
+export interface StudioDoorCode {
+  id: string;
+  booking_id: string;
+  code: string | null; // null until minted
+  valid_from: string;
+  valid_to: string;
+  status: StudioDoorCodeStatus;
+  attempts: number;
+  last_error: string | null;
+  emailed_to: string | null;
+  emailed_at: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 /** Booking joined with its customer + tier — used in admin views. */

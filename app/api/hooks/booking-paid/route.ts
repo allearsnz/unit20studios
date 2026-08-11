@@ -1,35 +1,16 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { sendAccessInstructions } from "@/lib/notifications";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { runPaidAutomations } from "@/lib/booking-paid";
 import type { Booking } from "@/lib/types";
-
-/**
- * Mint + email the studio door code the moment payment lands. The crew-side DB
- * trigger (crew migration 0050) already INSERTs a *pending* studio_door_codes
- * row on payment_status → paid; this kicks the `issue-studio-door-code` edge
- * function to mint it against TTLock and email the customer their code now,
- * rather than waiting for the per-minute cron. Best-effort: never throws, so it
- * can't break the access-instructions send or the webhook that triggered us.
- */
-async function issuePendingDoorCode(): Promise<void> {
-  try {
-    const supabase = createAdminClient();
-    // Service-role JWT satisfies the function's verify_jwt; process_pending
-    // mints every pending row (including the one just enqueued for this booking).
-    await supabase.functions.invoke("issue-studio-door-code", {
-      body: { process_pending: true },
-    });
-  } catch (e) {
-    console.error("[hooks/booking-paid] door-code mint failed", e);
-  }
-}
 
 /**
  * Supabase Database Webhook target — fires on `bookings` UPDATE.
  *
- * This is the single trigger for the post-payment access-instructions email, so
- * it works no matter *how* payment_status became 'paid': the Xero webhook
- * (POST /api/webhooks/xero) or a manual "mark paid" in the crew Studio tab.
+ * It covers every way payment_status can become 'paid' from OUTSIDE this app:
+ * the Xero webhook (POST /api/webhooks/xero) and a manual "mark paid" in the
+ * crew Studio tab. Marking paid in *this* app's admin runs the same chain
+ * in-process (see setPaymentStatus) so the admin gets a result on screen rather
+ * than trusting a webhook they cannot see; both paths land in
+ * `runPaidAutomations`, which is safe to run twice.
  *
  * Configure the Supabase webhook to send:
  *   Authorization: Bearer <BOOKING_HOOK_SECRET>
@@ -73,15 +54,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // Door code goes out ON PAYMENT (not on approval): mint the pending code now.
-  // Best-effort and independent of the access email.
-  await issuePendingDoorCode();
+  // Door code + access email both go out ON PAYMENT (not on approval).
+  const result = await runPaidAutomations(record.id);
 
-  try {
-    const result = await sendAccessInstructions(record.id);
-    return NextResponse.json({ ok: true, result });
-  } catch (e) {
-    console.error("[hooks/booking-paid] send failed", e);
-    return NextResponse.json({ error: "send_failed" }, { status: 500 });
+  // A transient send failure is worth a webhook redelivery, so answer 500 and
+  // let Supabase retry — the failure is also recorded on the booking now, so
+  // it stays visible in /admin whether or not a retry ever succeeds. The other
+  // outcomes (no_email, not_found, already_sent) are not fixed by retrying.
+  if (result.access.status === "send_failed") {
+    return NextResponse.json({ error: "send_failed", result }, { status: 500 });
   }
+  return NextResponse.json({ ok: true, result });
 }
