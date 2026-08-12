@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
+import { ROW_GRID } from "./bookingRowGrid";
 
 /**
  * One row of the bookings list, as a single link.
@@ -21,10 +22,6 @@ import { useLinkStatus } from "next/link";
  * It stays a real `<Link>` rather than a div with an onClick, so middle-click,
  * cmd-click, "copy link address" and keyboard focus all still behave.
  */
-
-/** Shared column track — the header row uses the same string, so they line up. */
-export const ROW_GRID =
-  "grid grid-cols-[8rem_minmax(8rem,1fr)_12.5rem_minmax(7rem,1fr)_6.5rem_7rem_6.5rem] items-center gap-x-4";
 
 export function BookingRowLink({
   href,

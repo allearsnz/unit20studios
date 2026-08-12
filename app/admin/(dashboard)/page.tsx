@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { CalendarOff, Zap } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { BookingRowLink, ROW_GRID } from "@/components/admin/BookingRowLink";
+import { BookingRowLink } from "@/components/admin/BookingRowLink";
+// From a plain module, not from BookingRowLink — that file is a client
+// component, and a constant imported across that boundary arrives as a
+// reference stub rather than the string. See bookingRowGrid.ts.
+import { ROW_GRID } from "@/components/admin/bookingRowGrid";
 import { PendingLink } from "@/components/admin/PendingLink";
 import { PaymentBadge, StatusBadge } from "@/components/admin/badges";
 import { formatNZ, nzDateHourToUtc } from "@/lib/timezone";

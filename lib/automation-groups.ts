@@ -88,6 +88,12 @@ function rollUp(key: string, label: string, members: AutomationStep[]): Automati
     .pop() ?? null;
 
   // Lead with the problem if there is one; otherwise say what's outstanding.
+  //
+  // `next:` is load-bearing. These labels are past-tense event names ("ID
+  // uploaded by customer"), so "2/3 done — ID uploaded by customer" reads as a
+  // list of what happened, when the step named is precisely the one that
+  // hasn't. Naming it as the next thing owed is the only phrasing that survives
+  // being read quickly.
   const worst = members.find((m) => m.state === state);
   const done = members.filter((m) => m.state === "done").length;
   const applicable = members.filter((m) => m.state !== "na").length;
@@ -100,7 +106,7 @@ function rollUp(key: string, label: string, members: AutomationStep[]): Automati
           : (worst?.label ?? label)
         : state === "na"
           ? "Doesn't apply"
-          : `${done}/${applicable} done — ${worst?.label.toLowerCase() ?? "waiting"}`;
+          : `${done}/${applicable} done · next: ${worst?.label ?? "waiting"}`;
 
   return { key, label, state, at, summary, steps: members };
 }
