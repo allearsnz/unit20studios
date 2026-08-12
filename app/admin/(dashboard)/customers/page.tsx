@@ -1,6 +1,8 @@
-import { Check } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { PendingLink } from "@/components/admin/PendingLink";
+// The grid constant comes from a plain module, not from the client component
+// that also uses it — see customerRowGrid.ts.
+import { CustomerRowLink } from "@/components/admin/CustomerRowLink";
+import { CUSTOMER_GRID } from "@/components/admin/customerRowGrid";
 import { formatNZ } from "@/lib/timezone";
 import { formatNZPhone } from "@/lib/validation";
 import type { Customer } from "@/lib/types";
@@ -33,44 +35,32 @@ export default async function CustomersPage() {
       ) : customers.length === 0 ? (
         <Notice>No customers yet — they appear here after the first booking.</Notice>
       ) : (
-        <div className="mt-8 overflow-x-auto">
-          <table className="w-full min-w-[720px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-left font-mono text-[11px] uppercase tracking-meta text-text-muted">
-                <th className="py-3 pr-4 font-medium">Name</th>
-                <th className="py-3 pr-4 font-medium">Email</th>
-                <th className="py-3 pr-4 font-medium">Phone</th>
-                <th className="py-3 pr-4 font-medium">ID</th>
-                <th className="py-3 pr-4 text-right font-medium">Bookings</th>
-                <th className="py-3 font-medium">Joined</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customers.map((c) => (
-                <tr key={c.id} className="group border-b border-border transition-colors hover:bg-bg-elev">
-                  <td className="py-3 pr-4">
-                    <PendingLink
-                      href={`/admin/customers/${c.id}`}
-                      className="inline-flex items-center text-text group-hover:text-accent"
-                    >
-                      {c.name}
-                    </PendingLink>
-                  </td>
-                  <td className="py-3 pr-4 text-text-muted">{c.email}</td>
-                  <td className="py-3 pr-4 mono text-text-muted">{formatNZPhone(c.phone)}</td>
-                  <td className="py-3 pr-4">
-                    {c.id_verified ? (
-                      <Check className="h-4 w-4 text-accent" aria-label="ID verified" />
-                    ) : (
-                      <span className="font-mono text-[11px] uppercase tracking-meta text-text-dim">No</span>
-                    )}
-                  </td>
-                  <td className="py-3 pr-4 text-right mono text-text">{c.bookings?.[0]?.count ?? 0}</td>
-                  <td className="py-3 mono text-text-muted">{formatNZ(c.created_at, "d MMM yyyy")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mt-8">
+          {/* Rows are links that restack on phones — see CustomerRowLink. This
+              was a min-w-[720px] table in an overflow container. */}
+          <div
+            className={`${CUSTOMER_GRID} hidden border-b border-border py-3 font-mono text-[11px] uppercase tracking-meta text-text-muted md:grid`}
+          >
+            <span>Name</span>
+            <span>Email</span>
+            <span>Phone</span>
+            <span>ID</span>
+            <span className="text-right">Bookings</span>
+            <span>Joined</span>
+          </div>
+
+          {customers.map((c) => (
+            <CustomerRowLink
+              key={c.id}
+              href={`/admin/customers/${c.id}`}
+              name={c.name}
+              email={c.email}
+              phone={formatNZPhone(c.phone)}
+              verified={c.id_verified}
+              bookings={c.bookings?.[0]?.count ?? 0}
+              joined={formatNZ(c.created_at, "d MMM yyyy")}
+            />
+          ))}
         </div>
       )}
     </div>
