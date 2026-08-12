@@ -19,10 +19,7 @@ export async function completeAccountSetup(): Promise<void> {
   const email = session.user.email;
   if (!email) return;
 
-  const name =
-    session.customer?.name ||
-    (session.user.user_metadata?.name as string | undefined) ||
-    "there";
+  const name = session.customer?.name || session.user.name || "there";
   const firstName = name.split(/\s+/)[0] || "there";
 
   try {

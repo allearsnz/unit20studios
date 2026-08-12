@@ -293,6 +293,79 @@
     background: var(--border);
     border: 0;
   }
+
+  /* ---------------------------------------------------------------- *
+   * Waiting states.
+   *
+   * The admin talks to a database on the other side of an ocean, so some
+   * navigations take a moment however tight the queries are. These are what
+   * stands in for the page while it comes: the shape arrives instantly, the
+   * content fills in. Silence for a second and a half reads as a dead click.
+   * ---------------------------------------------------------------- */
+
+  /* A block standing in for text or a panel that hasn't arrived. */
+  .skeleton {
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    animation: u20-skeleton 1.4s ease-in-out infinite;
+  }
+
+  /* Inline dot next to a clicked link, for the gap before the route-level
+     fallback takes over. Fixed size and pre-reserved space so appearing
+     doesn't shift the row it lives in. */
+  .link-hint {
+    display: inline-block;
+    width: 0.5em;
+    height: 0.5em;
+    margin-left: 0.5em;
+    border-radius: 9999px;
+    background: var(--accent);
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .link-hint.is-pending {
+    visibility: visible;
+    /* Delayed so a fast navigation never flashes a dot at anyone. */
+    animation:
+      u20-hint-in 0.2s ease 0.12s forwards,
+      u20-hint-pulse 1s ease-in-out 0.12s infinite;
+  }
+}
+
+@keyframes u20-skeleton {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes u20-hint-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes u20-hint-pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* The blanket reduced-motion rule below would freeze the skeleton's pulse into
+   a flat block — readable, but it stops saying "still coming". The pulse is
+   opacity-only and non-vestibular, so it gets the same carve-out the spinner
+   does. The link hint doesn't need one: it just shows, immediately and steady,
+   which is the whole job. */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation-duration: 1.4s !important;
+    animation-iteration-count: infinite !important;
+  }
+
+  .link-hint.is-pending {
+    animation: none !important;
+    opacity: 1;
+  }
 }
 
 /* ------------------------------------------------------------------ *

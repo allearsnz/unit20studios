@@ -29,7 +29,7 @@ export default async function BookPage() {
       }
     }
     account = {
-      name: customer?.name ?? (user.user_metadata?.name as string | undefined) ?? "",
+      name: customer?.name ?? user.name ?? "",
       email: customer?.email ?? user.email ?? "",
       phone: customer?.phone ?? "",
       dob: customer?.dob ?? "",

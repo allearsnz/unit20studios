@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Geist_Mono, Inter, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@/components/analytics/Analytics";
-import { IntroOverlay } from "@/components/transition/IntroOverlay";
 import "./globals.css";
 
 // Display / headings font. Currently Geist Mono as a free stand-in for the
@@ -74,9 +73,10 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body className="flex min-h-dvh flex-col bg-bg text-text antialiased">
-        {/* Preload the logo so the intro overlay's CSS mask paints on first frame */}
-        <link rel="preload" as="image" href="/unit20-logo.png" />
-        <IntroOverlay />
+        {/* The intro curtain lives in `(site)`, not here. At the root it also
+            covered `/admin` — a full-screen black rectangle over the dashboard
+            for 1.35s on the first admin page of every session. An intro is for
+            visitors arriving at the site, not for the owner opening a tool. */}
         <a
           href="#main"
           className="sr-only z-[100] rounded-sm bg-accent px-4 py-2 font-mono text-sm text-bg focus:not-sr-only focus:fixed focus:left-4 focus:top-4"

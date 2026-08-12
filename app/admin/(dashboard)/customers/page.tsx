@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Check } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PendingLink } from "@/components/admin/PendingLink";
 import { formatNZ } from "@/lib/timezone";
 import { formatNZPhone } from "@/lib/validation";
 import type { Customer } from "@/lib/types";
@@ -49,9 +49,12 @@ export default async function CustomersPage() {
               {customers.map((c) => (
                 <tr key={c.id} className="group border-b border-border transition-colors hover:bg-bg-elev">
                   <td className="py-3 pr-4">
-                    <Link href={`/admin/customers/${c.id}`} className="text-text group-hover:text-accent">
+                    <PendingLink
+                      href={`/admin/customers/${c.id}`}
+                      className="inline-flex items-center text-text group-hover:text-accent"
+                    >
                       {c.name}
-                    </Link>
+                    </PendingLink>
                   </td>
                   <td className="py-3 pr-4 text-text-muted">{c.email}</td>
                   <td className="py-3 pr-4 mono text-text-muted">{formatNZPhone(c.phone)}</td>

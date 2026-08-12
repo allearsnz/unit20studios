@@ -203,17 +203,29 @@ export type VerificationView = {
 /**
  * Everything the admin panel needs for one customer, in one call. Signed URLs
  * are only minted when there's something to look at.
+ *
+ * `prefetched` exists because the booking page needs this same `id_verifications`
+ * row for its automation checklist too, and the two were fetching it separately
+ * — a whole extra Tokyo round trip for a row already in memory. Pass the row in
+ * and this makes no query at all. `undefined` means "go and fetch it"; `null`
+ * means "I looked and there isn't one".
  */
 export async function verificationView(
   supabase: SupabaseClient,
   customer: Pick<Customer, "id" | "id_verified">,
+  prefetched?: IdVerification | null,
 ): Promise<VerificationView> {
-  const { data } = await supabase
-    .from("id_verifications")
-    .select("*")
-    .eq("customer_id", customer.id)
-    .maybeSingle();
-  const verification = (data as IdVerification | null) ?? null;
+  let verification: IdVerification | null;
+  if (prefetched !== undefined) {
+    verification = prefetched;
+  } else {
+    const { data } = await supabase
+      .from("id_verifications")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .maybeSingle();
+    verification = (data as IdVerification | null) ?? null;
+  }
 
   if (customer.id_verified) {
     return { state: "verified", verification, front: null, back: null };

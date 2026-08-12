@@ -1,13 +1,34 @@
 import Link from "next/link";
 import { CalendarOff, Zap } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { BookingRowLink, ROW_GRID } from "@/components/admin/BookingRowLink";
+import { PendingLink } from "@/components/admin/PendingLink";
 import { PaymentBadge, StatusBadge } from "@/components/admin/badges";
 import { formatNZ, nzDateHourToUtc } from "@/lib/timezone";
 import { formatNZDPlusGst } from "@/lib/pricing";
 import { cn } from "@/lib/utils";
-import type { BookingWithRelations } from "@/lib/types";
+import type { BookingStatus, PaymentStatus } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Exactly what the list renders — and therefore exactly what the query asks for.
+ * Naming the shape here rather than reusing `BookingWithRelations` is what stops
+ * the select drifting back to `*`: add a column to the table below and this
+ * won't compile until you fetch it.
+ */
+type BookingListRow = {
+  id: string;
+  friendly_id: string;
+  start_time: string;
+  end_time: string;
+  group_size: number;
+  total_price_cents: number;
+  status: BookingStatus;
+  payment_status: PaymentStatus;
+  customer: { name: string } | null;
+  pricing_tier: { label: string } | null;
+};
 
 const TABS = [
   { key: "today", label: "Today" },
@@ -23,13 +44,27 @@ export default async function AdminDashboard({
 }) {
   const { tab = "upcoming" } = await searchParams;
 
-  let bookings: BookingWithRelations[] = [];
+  let bookings: BookingListRow[] = [];
   let configured = true;
   try {
     const supabase = createAdminClient();
+    /**
+     * Nine columns, not `*`.
+     *
+     * `select("*, customer:customers(*), pricing_tier:pricing_tiers(*)")` fetched
+     * 33 booking columns joined to 13 customer columns and 10 tier columns, 200
+     * rows deep — roughly 400KB dragged from Tokyo to render a table that shows
+     * nine fields. It also put every customer's email, phone, DOB and notes into
+     * the page payload for a list that displays none of them.
+     *
+     * Keep this in step with the row markup below.
+     */
     let q = supabase
       .from("bookings")
-      .select("*, customer:customers(*), pricing_tier:pricing_tiers(*)");
+      .select(
+        "id,friendly_id,start_time,end_time,group_size,total_price_cents,status,payment_status," +
+          "customer:customers(name),pricing_tier:pricing_tiers(label)",
+      );
 
     const nowIso = new Date().toISOString();
     const todayNZ = formatNZ(new Date(), "yyyy-MM-dd");
@@ -48,7 +83,7 @@ export default async function AdminDashboard({
     }
 
     const { data } = await q.limit(200);
-    bookings = (data as BookingWithRelations[]) ?? [];
+    bookings = (data as unknown as BookingListRow[]) ?? [];
   } catch {
     configured = false;
   }
@@ -69,7 +104,7 @@ export default async function AdminDashboard({
 
       <div className="mt-8 flex gap-1 border-b border-border" role="tablist">
         {TABS.map((t) => (
-          <Link
+          <PendingLink
             key={t.key}
             href={`/admin?tab=${t.key}`}
             role="tab"
@@ -82,7 +117,7 @@ export default async function AdminDashboard({
             )}
           >
             {t.label}
-          </Link>
+          </PendingLink>
         ))}
       </div>
 
@@ -92,47 +127,49 @@ export default async function AdminDashboard({
         <Notice>No bookings in this view yet.</Notice>
       ) : (
         <div className="mt-6 overflow-x-auto">
-          <table className="w-full min-w-[760px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-border text-left font-mono text-[11px] uppercase tracking-meta text-text-muted">
-                <th className="py-3 pr-4 font-medium">Ref</th>
-                <th className="py-3 pr-4 font-medium">Customer</th>
-                <th className="py-3 pr-4 font-medium">When</th>
-                <th className="py-3 pr-4 font-medium">Room</th>
-                <th className="py-3 pr-4 text-right font-medium">Total</th>
-                <th className="py-3 pr-4 font-medium">Status</th>
-                <th className="py-3 font-medium">Payment</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bookings.map((b) => (
-                <tr key={b.id} className="group border-b border-border transition-colors hover:bg-bg-elev">
-                  <td className="py-3 pr-4">
-                    <Link href={`/admin/bookings/${b.id}`} className="mono text-text underline-offset-4 group-hover:text-accent">
-                      {b.friendly_id}
-                    </Link>
-                  </td>
-                  <td className="py-3 pr-4 text-text">{b.customer?.name ?? "—"}</td>
-                  <td className="py-3 pr-4 text-text-muted">
-                    <span className="mono">{formatNZ(b.start_time, "EEE d MMM")}</span>{" "}
-                    <span className="mono text-text-dim">
-                      {formatNZ(b.start_time, "HH:mm")}–{formatNZ(b.end_time, "HH:mm")}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 text-text-muted">
-                    {b.pricing_tier?.label ?? "—"} · {b.group_size}
-                  </td>
-                  <td className="py-3 pr-4 text-right mono text-text">{formatNZDPlusGst(b.total_price_cents)}</td>
-                  <td className="py-3 pr-4">
-                    <StatusBadge status={b.status} />
-                  </td>
-                  <td className="py-3">
-                    <PaymentBadge status={b.payment_status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {/* Rows are links, not table rows — the whole row is the target and
+              each one can show that it's been clicked. See BookingRowLink. */}
+          <div className="min-w-[860px]">
+            <div
+              className={`${ROW_GRID} border-b border-border py-3 font-mono text-[11px] uppercase tracking-meta text-text-muted`}
+            >
+              <span>Ref</span>
+              <span>Customer</span>
+              <span>When</span>
+              <span>Room</span>
+              <span className="text-right">Total</span>
+              <span>Status</span>
+              <span>Payment</span>
+            </div>
+
+            {bookings.map((b) => (
+              <BookingRowLink
+                key={b.id}
+                href={`/admin/bookings/${b.id}`}
+                reference={b.friendly_id}
+              >
+                <span className="truncate text-text">{b.customer?.name ?? "—"}</span>
+                <span className="text-text-muted">
+                  <span className="mono">{formatNZ(b.start_time, "EEE d MMM")}</span>{" "}
+                  <span className="mono text-text-dim">
+                    {formatNZ(b.start_time, "HH:mm")}–{formatNZ(b.end_time, "HH:mm")}
+                  </span>
+                </span>
+                <span className="truncate text-text-muted">
+                  {b.pricing_tier?.label ?? "—"} · {b.group_size}
+                </span>
+                <span className="mono text-right text-text">
+                  {formatNZDPlusGst(b.total_price_cents)}
+                </span>
+                <span>
+                  <StatusBadge status={b.status} />
+                </span>
+                <span>
+                  <PaymentBadge status={b.payment_status} />
+                </span>
+              </BookingRowLink>
+            ))}
+          </div>
         </div>
       )}
     </div>

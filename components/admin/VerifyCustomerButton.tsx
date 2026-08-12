@@ -1,10 +1,15 @@
 "use client";
 
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { verifyCustomer } from "@/app/admin/actions";
 
+/**
+ * `verifyCustomer` revalidates both the customer page and the booking-page route
+ * pattern, so the re-rendered page comes back with the action's result — there
+ * is nothing left for a `router.refresh()` to fetch, and it used to fetch all of
+ * it a second time.
+ */
 export function VerifyCustomerButton({
   customerId,
   verified,
@@ -12,7 +17,6 @@ export function VerifyCustomerButton({
   customerId: string;
   verified: boolean;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
 
   if (verified) {
@@ -30,7 +34,6 @@ export function VerifyCustomerButton({
       onClick={() =>
         start(async () => {
           await verifyCustomer(customerId);
-          router.refresh();
         })
       }
       className="btn btn-secondary h-10 px-4 font-mono text-xs uppercase tracking-meta"

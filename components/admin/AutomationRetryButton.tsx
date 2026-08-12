@@ -1,8 +1,6 @@
 "use client";
 
-import Link from "next/link";
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { RotateCw } from "lucide-react";
 import { retryAccessEmail, retryDoorCode } from "@/app/admin/actions";
 import type { StepAction } from "@/lib/automation";
@@ -16,8 +14,10 @@ import type { StepAction } from "@/lib/automation";
  * panel can email a customer something they weren't already owed.
  *
  * "Send ID link" is a link rather than a button because that action already
- * lives on the ID tab, with the context (send count, rotation warning) needed to
- * use it properly — two ways to fire the same rotating token is one too many.
+ * lives in the ID section of the customer card, with the context (send count,
+ * rotation warning) needed to use it properly — two ways to fire the same
+ * rotating token is one too many. It's now an in-page anchor: the ID section is
+ * always on screen, so there's nothing to navigate to.
  */
 
 const COPY: Record<StepAction, { label: string; busy: string }> = {
@@ -33,18 +33,17 @@ export function AutomationRetryButton({
   bookingId: string;
   action: StepAction;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
 
   if (action === "send_id_link") {
     return (
-      <Link
-        href={`/admin/bookings/${bookingId}?panel=id`}
+      <a
+        href="#id-check"
         className="mt-2 inline-flex font-mono text-[11px] uppercase tracking-meta text-accent hover:underline"
       >
-        Send it from the ID tab →
-      </Link>
+        Send it from the ID section ↑
+      </a>
     );
   }
 
@@ -78,7 +77,6 @@ export function AutomationRetryButton({
                   : "Couldn't reach the minter. The crew cron retries every minute.",
               );
             }
-            router.refresh();
           })
         }
         className="btn btn-secondary h-9 px-3 font-mono text-[11px] uppercase tracking-meta"

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { assertAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendEmail, icsAttachment } from "@/lib/email";
 import { buildBookingIcs } from "@/lib/ics";
 import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
@@ -250,6 +251,11 @@ export async function verifyCustomer(customerId: string) {
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
   revalidatePath("/admin");
+  // The approve button also lives in the customer card on a BOOKING page, and
+  // that page's ID section and automation checklist both read this. Revalidating
+  // the route pattern covers whichever booking the admin is looking at — without
+  // it, approving from a booking page updated nothing on screen.
+  revalidatePath("/admin/bookings/[id]", "page");
 }
 
 /**
@@ -262,6 +268,9 @@ export async function resendIdVerification(customerId: string): Promise<RequestR
   const result = await requestIdVerification(customerId);
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
+  // Same reason as verifyCustomer: this button is on the booking page too, and
+  // the "ID upload link emailed" row there is derived from what it writes.
+  revalidatePath("/admin/bookings/[id]", "page");
   return result;
 }
 
@@ -668,4 +677,23 @@ export async function deleteDiscountCode(id: string) {
   await supabase.from("bookings").update({ discount_code_id: null }).eq("discount_code_id", id);
   await supabase.from("discount_codes").delete().eq("id", id);
   revalidatePath("/admin/discounts");
+}
+
+/**
+ * Sign the admin out, server-side.
+ *
+ * This used to be a client component calling `supabase.auth.signOut()` in the
+ * browser — which meant importing `@supabase/supabase-js` into the admin client
+ * bundle. The button lives in `AdminShell`, i.e. the layout, so that import put
+ * ~61KB gzipped of auth SDK on the hydration path of EVERY admin page, to run
+ * one function on one click. As a server action the button needs no JavaScript
+ * at all and the SDK leaves the bundle.
+ *
+ * No `assertAdmin()` guard: signing out is not a privileged operation, and a
+ * request that isn't signed in has nothing to sign out of.
+ */
+export async function signOutAdmin() {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+  redirect("/admin/login");
 }

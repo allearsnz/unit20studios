@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { AlertTriangle, Check, Mail, X } from "lucide-react";
 import { setPaymentStatus, type PaymentUpdateResult } from "@/app/admin/actions";
 import { cn } from "@/lib/utils";
@@ -36,17 +35,19 @@ export function PaymentControl({
   sessionEnded: boolean;
   cancelled: boolean;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<PaymentUpdateResult | null>(null);
 
+  // No `router.refresh()`: `setPaymentStatus` revalidates this page, so its
+  // result arrives with the page already re-rendered. Refreshing on top of that
+  // re-ran every query on the page for nothing — and this is the slowest action
+  // in the admin, because it also sends two emails before it returns.
   const apply = (opt: PaymentStatus) =>
     start(async () => {
       const r = await setPaymentStatus(id, opt);
       setResult(r.triggered ? r : null);
       setConfirming(false);
-      router.refresh();
     });
 
   return (
@@ -153,8 +154,8 @@ export function PaymentControl({
 
       <p className="mt-4 text-xs text-text-dim">
         Every step that follows a payment — code minted, code emailed, access email
-        sent — is listed on the <strong className="text-text-muted">Automation</strong>{" "}
-        tab, with timestamps.
+        sent — is listed under{" "}
+        <strong className="text-text-muted">Automation</strong>, with timestamps.
       </p>
     </div>
   );
@@ -175,7 +176,7 @@ function Outcome({ result }: { result: PaymentUpdateResult }) {
         : result.access === "no_email"
           ? "No access email: this customer has no email address on file."
           : result.access === "not_found"
-            ? "No access email: the booking couldn't be re-read. Try the Automation tab."
+            ? "No access email: the booking couldn't be re-read. Check the Automation list."
             : `Access instructions FAILED${result.accessError ? ` — ${result.accessError}` : ""}.`;
 
   return (

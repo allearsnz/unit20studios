@@ -82,30 +82,51 @@ const HOUR = 3600 * 1000;
  * Takes the booking already joined to its customer (the admin page has it) and
  * makes two more reads: the customer's ID-check row and the booking's door
  * code. Both are single-row lookups on indexed columns.
+ *
+ * The optional `prefetched` rows let the booking page hand over what it already
+ * read. It renders the ID panel from the same `id_verifications` row, and this
+ * function used to go and fetch it a second time — one more round trip to a
+ * database on the other side of the Pacific for a row already in memory.
+ * `undefined` means "fetch it"; `null` means "I looked and there isn't one".
  */
 export async function automationView(
   supabase: SupabaseClient,
   booking: BookingWithRelations,
+  prefetched?: {
+    idCheck?: IdVerification | null;
+    doorCode?: StudioDoorCode | null;
+  },
 ): Promise<AutomationView> {
+  const needsId = prefetched?.idCheck === undefined;
+  const needsCode = prefetched?.doorCode === undefined;
+
   const [idRes, codeRes] = await Promise.all([
-    supabase
-      .from("id_verifications")
-      .select("*")
-      .eq("customer_id", booking.customer_id)
-      .maybeSingle(),
+    needsId
+      ? supabase
+          .from("id_verifications")
+          .select("*")
+          .eq("customer_id", booking.customer_id)
+          .maybeSingle()
+      : null,
     // Newest first: a manual re-issue from the crew panel supersedes the old
     // row rather than deleting it, so "the code" is the most recent one.
-    supabase
-      .from("studio_door_codes")
-      .select("*")
-      .eq("booking_id", booking.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    needsCode
+      ? supabase
+          .from("studio_door_codes")
+          .select("*")
+          .eq("booking_id", booking.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+      : null,
   ]);
 
-  const idCheck = (idRes.data as IdVerification | null) ?? null;
-  const doorCode = (codeRes.data as StudioDoorCode | null) ?? null;
+  const idCheck = needsId
+    ? ((idRes?.data as IdVerification | null) ?? null)
+    : (prefetched?.idCheck ?? null);
+  const doorCode = needsCode
+    ? ((codeRes?.data as StudioDoorCode | null) ?? null)
+    : (prefetched?.doorCode ?? null);
 
   return {
     steps: buildSteps(booking, idCheck, doorCode),

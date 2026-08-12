@@ -44,17 +44,28 @@ export async function proxy(req: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // `getClaims()`, not `getUser()`. This project signs its JWTs with an
+  // asymmetric key (ES256 — see /auth/v1/.well-known/jwks.json), so the token is
+  // verified locally with WebCrypto against a cached key set. `getUser()` is a
+  // round trip to the Auth API in Tokyo, and this proxy runs on EVERY request to
+  // /admin and /account — including every RSC prefetch and every router.refresh.
+  // It was the single most-repeated network call in the app.
+  //
+  // The trade: a session revoked server-side stays valid here until the access
+  // token expires, rather than dying on the next request. That is ordinary JWT
+  // behaviour and the path Supabase recommends for exactly this case. The
+  // signature check is still cryptographic — nothing here trusts the cookie.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const claims = claimsData?.claims ?? null;
+  const email = typeof claims?.email === "string" ? claims.email.toLowerCase() : null;
 
   if (isAdmin) {
-    if (!user || (adminEmail && user.email?.toLowerCase() !== adminEmail)) {
+    if (!claims || (adminEmail && email !== adminEmail)) {
       return NextResponse.redirect(new URL("/admin/login", req.url));
     }
   } else {
     // /account/* — any authenticated user. Preserve where they were headed.
-    if (!user) {
+    if (!claims) {
       const login = new URL("/account/login", req.url);
       login.searchParams.set("next", pathname);
       return NextResponse.redirect(login);

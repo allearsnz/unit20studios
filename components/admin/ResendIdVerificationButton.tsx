@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { Send } from "lucide-react";
 import { resendIdVerification } from "@/app/admin/actions";
 
@@ -24,7 +23,6 @@ export function ResendIdVerificationButton({
   customerId: string;
   label?: string;
 }) {
-  const router = useRouter();
   const [pending, start] = useTransition();
   const [result, setResult] = useState<string | null>(null);
 
@@ -41,7 +39,6 @@ export function ResendIdVerificationButton({
                 ? `Sent to ${r.email}`
                 : (FAILURE_COPY[r.reason] ?? `Couldn't send — ${r.reason}`),
             );
-            router.refresh();
           })
         }
         className="btn btn-secondary h-10 w-full px-4 font-mono text-xs uppercase tracking-meta"

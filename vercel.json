@@ -1,5 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "//regions": [
+    "Functions run next to the database, not next to the users.",
+    "",
+    "Supabase is in ap-northeast-1 (Tokyo). Without this, functions defaulted to",
+    "iad1 (Washington DC), so every query went NZ -> Sydney edge -> Virginia ->",
+    "Tokyo and back. The arithmetic for a page making N sequential queries from",
+    "region R is: 185ms floor + RTT(NZ->R) + N * RTT(R->Tokyo).",
+    "",
+    "  iad1:  385ms + N*170ms   (N=3 -> ~895ms, and it measured 1.2-1.8s)",
+    "  syd1:  185ms + N*110ms   (N=3 -> ~515ms)",
+    "  hnd1:  290ms + N*2ms     (N=3 -> ~296ms)",
+    "",
+    "syd1 only wins for a function that makes NO database call at all, and there",
+    "isn't one. hnd1 also makes an extra sequential query cost ~2ms instead of",
+    "170ms, which is why the admin stopped feeling laggy rather than just getting",
+    "faster. This moves FUNCTIONS only — static marketing pages stay on the CDN",
+    "and are still served from Sydney."
+  ],
+  "regions": ["hnd1"],
   "crons": [
     { "path": "/api/cron/reminders", "schedule": "0 19 * * *" },
     { "path": "/api/cron/post-session", "schedule": "0 20 * * *" },
