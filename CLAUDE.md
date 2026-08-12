@@ -156,8 +156,24 @@ and the crew app's Studio tab) and `setPaymentStatus` in `app/admin/actions.ts`
 (so the admin sees a result instead of trusting a webhook configured in the
 Supabase dashboard and invisible from this repo). Running twice is safe.
 
+**Two readings of the same columns — don't merge them.** `lib/automation.ts` is
+the *admin's* view: it exists to say "TTLock refused 3 times", "no record", "the
+paid webhook isn't wired up". `lib/booking-progress.ts` is the *customer's* view
+of the same booking (Booked → ID → Confirmed → Paid → How to get in → Session →
+Hours added), shown on the confirmation page and under each booking on
+`/account`. Merging them would mean either leaking operational failures into a
+customer's inbox or blunting the admin panel. If you add a step, decide which
+question it answers first.
+
+**The account prompt is suppressed by `customers.auth_user_id`.** The
+confirmation page and both booking emails offer to set up an account only when
+that column is null, so it stops asking the moment someone signs up. The signup
+link never carries their email in the query string — `resolveLinkedCustomer`
+matches on the verified email at sign-up instead, so the history connects itself
+without putting an address into logs, history and `Referer`.
+
 `lib/automation.ts` derives the per-booking checklist behind the admin
-**Automation** tab. Its rule: every row is a stored timestamp or a stored row —
+**Automation** section. Its rule: every row is a stored timestamp or a stored row —
 never inferred from booking status. Two things are genuinely unobservable and
 are labelled as such rather than faked: whether an email was *delivered* (no
 bounce webhook), and whether the door code was ever typed in (TTLock offline
