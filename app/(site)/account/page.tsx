@@ -42,7 +42,16 @@ export default async function AccountPage() {
   }
 
   const admin = createAdminClient();
-  const nowIso = new Date().toISOString();
+  // One clock read for the whole page, handed to the client list too — see the
+  // `now` prop on BookingList for why it isn't read during render down there.
+  //
+  // The purity rule is about render functions running twice and disagreeing.
+  // This is an async server component: it renders once, per request, and this
+  // read is exactly the request-time fact the rest of the page is derived from.
+  // Doing it here is what makes everything downstream pure.
+  // eslint-disable-next-line react-hooks/purity
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
 
   const [{ data: bookingRows }, balance, completedHours, { data: rewardRows }] = await Promise.all([
     admin
@@ -98,12 +107,24 @@ export default async function AccountPage() {
       </div>
 
       <div className="mt-12 grid gap-10 md:grid-cols-2">
+        {/* Upcoming open by default — the whole reason to come here is to check
+            where a session that hasn't happened yet has got to. Past ones stay
+            collapsed; nobody needs a tracker for a session they've been to. */}
         <BookingList
           title="Upcoming sessions"
           bookings={upcoming}
           empty="Nothing booked yet."
+          idVerified={customer.id_verified}
+          now={now}
+          defaultOpen
         />
-        <BookingList title="Past sessions" bookings={past} empty="No past sessions yet." />
+        <BookingList
+          title="Past sessions"
+          bookings={past}
+          empty="No past sessions yet."
+          idVerified={customer.id_verified}
+          now={now}
+        />
       </div>
 
       <div className="mt-12 border-t border-border pt-8">

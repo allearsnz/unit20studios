@@ -63,6 +63,10 @@ function emailProps(b: FullBooking) {
     groupSize: b.group_size,
     total: formatNZDPlusGstIncl(b.total_price_cents),
     manageUrl: `${site.url}/studio/book/confirmation?id=${b.friendly_id}`,
+    // Prompt an account only if they haven't got one — `auth_user_id` is
+    // stamped when a customers row is linked to a sign-in, so it stops asking
+    // by itself once they sign up.
+    signupUrl: b.customer.auth_user_id ? null : `${site.url}/account/signup`,
   };
 }
 
@@ -530,6 +534,7 @@ export async function quickBook(formData: FormData) {
         groupSize,
         total: formatNZDPlusGstIncl(total),
         manageUrl: `${site.url}/studio/book/confirmation?id=${booking.friendly_id}`,
+        signupUrl: customer.auth_user_id ? null : `${site.url}/account/signup`,
       }),
     });
   }

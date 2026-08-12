@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarPlus, Check, Clock } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCustomerSession } from "@/lib/customer-auth";
+import { bookingProgress } from "@/lib/booking-progress";
+import { BookingProgress } from "@/components/account/BookingProgress";
+import { CreateAccountCta } from "@/components/account/CreateAccountCta";
 import { formatBookingWhen } from "@/lib/timezone";
 import {
   BULK_PACK,
@@ -10,6 +14,11 @@ import {
   groupSurchargeCents,
 } from "@/lib/pricing";
 import { site } from "@/lib/site";
+import type { BookingStatus, PaymentStatus } from "@/lib/types";
+
+// Reads the session to decide whether to offer an account, and the booking row
+// changes as it moves through confirmation — neither survives caching.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Booking confirmation",
@@ -23,8 +32,12 @@ type ConfirmBooking = {
   duration_hours: number;
   total_price_cents: number;
   group_size: number;
-  status: string;
+  status: BookingStatus;
+  payment_status: PaymentStatus;
+  access_sent_at: string | null;
+  banked_hours_used: number;
   pricing_tier: { label: string } | { label: string }[] | null;
+  customer: { id_verified: boolean } | { id_verified: boolean }[] | null;
 };
 
 export default async function ConfirmationPage({
@@ -34,27 +47,33 @@ export default async function ConfirmationPage({
 }) {
   const { id } = await searchParams;
 
-  let booking: ConfirmBooking | null = null;
-  if (id) {
-    try {
-      const supabase = createAdminClient();
-      const { data } = await supabase
-        .from("bookings")
-        .select(
-          "friendly_id,start_time,end_time,duration_hours,total_price_cents,group_size,status, pricing_tier:pricing_tiers(label)",
-        )
-        .eq("friendly_id", id)
-        .maybeSingle();
-      booking = (data as ConfirmBooking | null) ?? null;
-    } catch {
-      booking = null;
-    }
-  }
+  // In parallel: the booking, and whether they're already signed in. The second
+  // decides only whether to show the sign-up card, so it must never hold up the
+  // first — and a failure to read it must never cost anyone their confirmation.
+  const [booking, session] = await Promise.all([
+    loadBooking(id),
+    getCustomerSession().catch(() => null),
+  ]);
 
   const confirmed = booking?.status === "confirmed";
   const tierLabel = Array.isArray(booking?.pricing_tier)
     ? booking?.pricing_tier[0]?.label
     : booking?.pricing_tier?.label;
+  const customer = Array.isArray(booking?.customer)
+    ? booking?.customer[0]
+    : booking?.customer;
+
+  const progress = booking
+    ? bookingProgress({
+        status: booking.status,
+        payment_status: booking.payment_status,
+        start_time: booking.start_time,
+        end_time: booking.end_time,
+        access_sent_at: booking.access_sent_at,
+        idVerified: customer?.id_verified ?? false,
+        banked: booking.banked_hours_used > 0,
+      })
+    : null;
   // A 10-hour pack booking carries the full pack price as its total — no
   // ordinary 1–2h booking gets anywhere near it.
   const isPack = !!booking && booking.total_price_cents >= BULK_PACK.totalCents;
@@ -82,6 +101,13 @@ export default async function ConfirmationPage({
                 ? `We've recorded your booking (${id}). Check your email for the full details.`
                 : "We couldn't find that booking reference. Check your email for confirmation, or get in touch."}
         </p>
+
+        {progress ? (
+          <div className="mt-10 border-t border-border pt-8">
+            <p className="eyebrow mb-6">Where it&apos;s up to</p>
+            <BookingProgress progress={progress} />
+          </div>
+        ) : null}
 
         {booking ? (
           <dl className="mt-10 border-t border-border">
@@ -161,9 +187,52 @@ export default async function ConfirmationPage({
           </a>
           .
         </p>
+
+        {/* Signed out and we actually have a booking to attach: offer the
+            account. Signed in: point at the dashboard instead, because the
+            hours from this session are about to appear on it. */}
+        {booking ? (
+          session ? (
+            <Link
+              href="/account"
+              className="mt-12 flex items-center justify-between gap-4 border border-border bg-bg-elev px-5 py-4 transition-colors hover:border-border-strong"
+            >
+              <span>
+                <span className="block font-mono text-[11px] uppercase tracking-meta text-text-muted">
+                  Your account
+                </span>
+                <span className="mt-1 block text-sm text-text">
+                  This session and your play time are on your dashboard.
+                </span>
+              </span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+            </Link>
+          ) : (
+            <CreateAccountCta hoursBooked={booking.duration_hours} />
+          )
+        ) : null}
       </div>
     </section>
   );
+}
+
+async function loadBooking(id: string | undefined): Promise<ConfirmBooking | null> {
+  if (!id) return null;
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("bookings")
+      .select(
+        "friendly_id,start_time,end_time,duration_hours,total_price_cents,group_size," +
+          "status,payment_status,access_sent_at,banked_hours_used," +
+          "pricing_tier:pricing_tiers(label),customer:customers(id_verified)",
+      )
+      .eq("friendly_id", id)
+      .maybeSingle();
+    return (data as ConfirmBooking | null) ?? null;
+  } catch {
+    return null;
+  }
 }
 
 function Row({

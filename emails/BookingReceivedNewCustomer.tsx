@@ -1,4 +1,5 @@
 import {
+  AccountPrompt,
   DetailPanel,
   EmailButton,
   EmailHeading,
@@ -20,6 +21,7 @@ export default function BookingReceivedNewCustomer({
   rateNote = null,
   surchargeLabel = null,
   packNote = null,
+  signupUrl = null,
 }: BookingEmailProps) {
   return (
     <EmailLayout
@@ -56,6 +58,7 @@ export default function BookingReceivedNewCustomer({
       </InfoBlock>
 
       <EmailButton href={manageUrl}>View request</EmailButton>
+      {signupUrl ? <AccountPrompt signupUrl={signupUrl} /> : null}
     </EmailLayout>
   );
 }

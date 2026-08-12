@@ -1,4 +1,5 @@
 import {
+  AccountPrompt,
   DetailPanel,
   EmailButton,
   EmailHeading,
@@ -26,6 +27,9 @@ export type BookingEmailProps = {
   surchargeLabel?: string | null;
   /** Extra paragraph for 10-hour pack bookings. */
   packNote?: string | null;
+  /** Where to sign up. Omitted when the customer already has an account,
+   *  which is what suppresses the prompt entirely. */
+  signupUrl?: string | null;
 };
 
 export default function BookingConfirmed({
@@ -40,6 +44,7 @@ export default function BookingConfirmed({
   rateNote = null,
   surchargeLabel = null,
   packNote = null,
+  signupUrl = null,
 }: BookingEmailProps) {
   return (
     <EmailLayout
@@ -78,6 +83,7 @@ export default function BookingConfirmed({
       </EmailText>
 
       <EmailButton href={manageUrl}>View booking</EmailButton>
+      {signupUrl ? <AccountPrompt signupUrl={signupUrl} /> : null}
     </EmailLayout>
   );
 }

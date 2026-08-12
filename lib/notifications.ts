@@ -45,6 +45,10 @@ export async function sendBookingCreatedEmails(opts: {
     rateNote: rateNote ?? null,
     surchargeLabel,
     packNote,
+    // Only prompt people who haven't got an account. `auth_user_id` is stamped
+    // the moment a customers row is linked to a sign-in, so its absence is the
+    // whole test — and it means a customer who signs up later stops being asked.
+    signupUrl: customer.auth_user_id ? null : `${site.url}/account/signup`,
   };
 
   if (pending) {

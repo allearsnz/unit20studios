@@ -130,50 +130,43 @@ export default async function AdminDashboard({
       ) : bookings.length === 0 ? (
         <Notice>No bookings in this view yet.</Notice>
       ) : (
-        <div className="mt-6 overflow-x-auto">
+        <div className="mt-6">
           {/* Rows are links, not table rows — the whole row is the target and
-              each one can show that it's been clicked. See BookingRowLink. */}
-          <div className="min-w-[860px]">
-            <div
-              className={`${ROW_GRID} border-b border-border py-3 font-mono text-[11px] uppercase tracking-meta text-text-muted`}
-            >
-              <span>Ref</span>
-              <span>Customer</span>
-              <span>When</span>
-              <span>Room</span>
-              <span className="text-right">Total</span>
-              <span>Status</span>
-              <span>Payment</span>
-            </div>
+              each one can show that it's been clicked. BookingRowLink renders a
+              stacked block on phones and this seven-column grid from `md` up,
+              so there's no sideways scrolling to find a status any more. */}
+          <div
+            className={`${ROW_GRID} hidden border-b border-border py-3 font-mono text-[11px] uppercase tracking-meta text-text-muted md:grid`}
+          >
+            <span>Ref</span>
+            <span>Customer</span>
+            <span>When</span>
+            <span>Room</span>
+            <span className="text-right">Total</span>
+            <span>Status</span>
+            <span>Payment</span>
+          </div>
 
-            {bookings.map((b) => (
-              <BookingRowLink
-                key={b.id}
-                href={`/admin/bookings/${b.id}`}
-                reference={b.friendly_id}
-              >
-                <span className="truncate text-text">{b.customer?.name ?? "—"}</span>
-                <span className="text-text-muted">
+          {bookings.map((b) => (
+            <BookingRowLink
+              key={b.id}
+              href={`/admin/bookings/${b.id}`}
+              reference={b.friendly_id}
+              customer={b.customer?.name ?? "—"}
+              when={
+                <>
                   <span className="mono">{formatNZ(b.start_time, "EEE d MMM")}</span>{" "}
                   <span className="mono text-text-dim">
                     {formatNZ(b.start_time, "HH:mm")}–{formatNZ(b.end_time, "HH:mm")}
                   </span>
-                </span>
-                <span className="truncate text-text-muted">
-                  {b.pricing_tier?.label ?? "—"} · {b.group_size}
-                </span>
-                <span className="mono text-right text-text">
-                  {formatNZDPlusGst(b.total_price_cents)}
-                </span>
-                <span>
-                  <StatusBadge status={b.status} />
-                </span>
-                <span>
-                  <PaymentBadge status={b.payment_status} />
-                </span>
-              </BookingRowLink>
-            ))}
-          </div>
+                </>
+              }
+              room={`${b.pricing_tier?.label ?? "—"} · ${b.group_size}`}
+              total={formatNZDPlusGst(b.total_price_cents)}
+              status={<StatusBadge status={b.status} />}
+              payment={<PaymentBadge status={b.payment_status} />}
+            />
+          ))}
         </div>
       )}
     </div>

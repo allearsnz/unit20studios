@@ -393,3 +393,55 @@ export function EmailButton({
     </Section>
   );
 }
+
+/**
+ * "Set up an account" footer block for the booking emails.
+ *
+ * Rendered only when the customer hasn't got one — prompting someone who
+ * already signed in to sign up is how a useful email starts getting ignored.
+ * The caller decides, from `customers.auth_user_id`.
+ *
+ * A quiet block rather than a second button: the email already has one CTA
+ * ("View booking"), and two accent buttons competing is how neither gets
+ * pressed.
+ */
+export function AccountPrompt({ signupUrl }: { signupUrl: string }) {
+  return (
+    <Section
+      style={{
+        borderTop: `1px solid ${c.border}`,
+        paddingTop: "22px",
+        margin: "10px 0 0",
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: mono,
+          fontSize: "10px",
+          textTransform: "uppercase",
+          letterSpacing: "0.18em",
+          color: c.muted,
+          margin: "0 0 8px",
+        }}
+      >
+        Keep track of your hours
+      </Text>
+      <Text
+        style={{
+          fontFamily: sans,
+          fontSize: "14px",
+          lineHeight: "1.65",
+          color: c.muted,
+          margin: "0 0 10px",
+        }}
+      >
+        Set up an account and every session shows up in one place, along with
+        your play time and any reward you&apos;ve earned.{" "}
+        <Link href={signupUrl} style={{ color: c.accent, textDecoration: "underline" }}>
+          Create your account
+        </Link>{" "}
+        using this same email address and your booking history connects itself.
+      </Text>
+    </Section>
+  );
+}
