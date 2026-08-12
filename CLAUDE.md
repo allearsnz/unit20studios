@@ -179,6 +179,36 @@ design-system/   MASTER.md (locked)
 **Admin auth**: a single account — the email in `ADMIN_EMAIL`, signing in at
 `/admin/login`. Created by hand in Supabase, not by the app.
 
+**Function region — `"regions": ["hnd1"]` in `vercel.json`. Don't remove it.**
+Functions run next to the database, not next to the users. Supabase is in
+**ap-northeast-1 (Tokyo)**; without this, Vercel defaults to `iad1` (Washington
+DC) and every query goes NZ → Sydney edge → Virginia → Tokyo and back. A page
+making N sequential queries from region R costs roughly
+`185ms floor + RTT(NZ→R) + N × RTT(R→Tokyo)`:
+
+| Region | N=1 | N=3 | N=5 |
+|---|---|---|---|
+| `iad1` (the old default) | 555ms | 895ms | 1,235ms |
+| `syd1` (nearest the users) | 295ms | 515ms | 735ms |
+| **`hnd1` (with the database)** | **292ms** | **296ms** | **302ms** |
+
+`syd1` only wins for a function making *no* database call, and there isn't one.
+The real prize is the flat column: an extra sequential `await` costs ~2ms
+instead of 170ms. This moves **functions only** — static marketing pages stay on
+the CDN and are still served from Sydney. `vercel.json` is schema-validated and
+rejects comment keys, which is why this note lives here.
+
+**Admin auth reads the JWT, it doesn't phone home.** `proxy.ts`,
+`lib/admin-auth.ts` and `lib/customer-auth.ts` use `supabase.auth.getClaims()`,
+not `getUser()`. This project signs with **ES256** (see
+`/auth/v1/.well-known/jwks.json`), so the token is verified locally via WebCrypto
+against a JWKS cached process-globally by auth-js. `getUser()` is a network round
+trip to the Auth API, and the proxy runs on *every* request to `/admin` and
+`/account` — including every RSC prefetch. The trade: a session revoked
+server-side stays valid until its access token expires. If you ever move this
+project back to a symmetric JWT secret, `getClaims()` silently starts making the
+same network call again.
+
 **Cron** (in `vercel.json`, all guarded by `CRON_SECRET` as a bearer token):
 `/api/cron/reminders` (24h-out), `/api/cron/post-session` (2h after end — marks
 completed, follow-up email, mints rewards), `/api/cron/cleanup` (daily, deletes
