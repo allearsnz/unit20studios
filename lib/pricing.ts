@@ -1,97 +1,34 @@
 import { formatInTimeZone } from "date-fns-tz";
 import { NZ_TZ } from "./timezone";
-import type { PricingTier } from "./types";
+import {
+  DEFAULT_PRICING_SETTINGS,
+  ONLINE_MAX_DURATION_HOURS,
+  TIER_SLUG,
+  packBankedRemainder,
+  packHourlyCents,
+  type PricingSettings,
+} from "./pricing-settings";
 
 /**
- * One bookable tier: groups up to 8, sessions of 1 or 2 hours online.
- * $50+GST for 1 hour, $80+GST for 2 hours — with a weekday-daytime deal
- * (see WEEKDAY_DAYTIME_DEAL) that makes qualifying 2-hour sessions $60+GST.
- * Groups of 5–8 add a flat surcharge (GROUP_SURCHARGE). Longer sessions go
- * through email (FLAT_LIMITS).
- * Prices are stored in cents, EXCLUSIVE of GST. UI appends "+GST".
+ * What a session costs. Every function here takes the live `PricingSettings`
+ * (see `lib/pricing-settings.ts`) — nothing about price is hard-coded any
+ * more, because it is all editable at `/admin/pricing`.
  *
- * NOTE: the live booking API reads this tier from the `pricing_tiers` table,
- * so price changes here must ship with a matching supabase migration.
+ * Server code gets the settings from `getPricingSettings()`
+ * (`lib/pricing-store.ts`); client components are handed them as a prop from
+ * the server component that rendered them. Prices are in cents, EXCLUSIVE of
+ * GST — the UI appends "+GST".
  */
-export const FLAT_TIER: Omit<PricingTier, "id"> = {
-  slug: "small",
-  label: "Up to 8 people",
-  max_people: 8,
-  peak_1h_price_cents: 5000,   // $50+GST / 1 hour
-  peak_2h_price_cents: 8000,   // $80+GST / 2 hours (standard)
-  peak_extra_hour_price_cents: 0, // not bookable online; enquire
-  off_peak_multiplier: 1.0,    // flat rate; the weekday deal is computed in code
-  sort_order: 1,
+
+export {
+  DEFAULT_PRICING_SETTINGS,
+  ONLINE_MAX_DURATION_HOURS,
+  TIER_SLUG,
+  packBankedRemainder,
+  packHourlyCents,
 };
+export type { PricingSettings };
 
-/**
- * Weekday-daytime deal: a 2-hour session that sits entirely inside
- * Mon–Fri 10:00–16:00 NZ time (Pacific/Auckland) is $60+GST instead of the
- * standard $80+GST. Because the whole session must fit in the window, that
- * means a weekday start between 10:00 and 14:00. Computed in code from the
- * booking start time — deliberately NOT stored in `pricing_tiers`.
- */
-export const WEEKDAY_DAYTIME_DEAL = {
-  windowStartHour: 10, // window opens 10:00 NZ
-  windowEndHour: 16,   // session must END by 16:00 NZ
-  twoHourPriceCents: 6000, // $60+GST / 2 hours
-  label: "Weekday daytime (Mon–Fri, 10am–4pm, no sub)",
-  /**
-   * Appended wherever the deal is named without the full bracket above (short
-   * option labels, price rows). Keep the two in step: every customer-facing
-   * mention of this rate has to carry the no-sub condition.
-   */
-  shortNote: "(no sub)",
-} as const;
-
-/**
- * Bulk pack: $25+GST/hr when you prepay 10 hours ($250+GST). Bookable online —
- * the customer schedules the FIRST 2 hours when they book; the remaining
- * 8 hours are arranged directly across future visits. The stored booking is
- * that first 2-hour session with the full pack price as its total.
- */
-export const BULK_PACK = {
-  hourlyCents: 2500,           // $25+GST / hr
-  packHours: 10,               // prepaid block
-  totalCents: 25000,           // $250+GST
-  firstSessionHours: 2,        // scheduled online at booking time
-} as const;
-
-/**
- * Hard caps for the online booking flow.
- * Anything outside these gets routed to /contact with a prefilled subject.
- */
-export const FLAT_LIMITS = {
-  maxDurationHours: 2,
-  maxGroupSize: 8,
-} as const;
-
-/**
- * Flat group surcharge for larger groups: bookings of MORE than
- * `threshold` people add a fixed amount (ex-GST) on top of the base rate —
- * +$20 for a 1-hour booking, +$30 for a 2-hour booking (the 10-hour pack's
- * first 2-hour session counts as a 2-hour booking). Applied in code, not
- * stored in `pricing_tiers`.
- */
-export const GROUP_SURCHARGE = {
-  threshold: 4,        // surcharge applies when groupSize > 4
-  oneHourCents: 2000,  // +$20+GST on a 1h booking
-  twoHourCents: 3000,  // +$30+GST on a 2h booking (incl. the pack's first 2h)
-} as const;
-
-/** Ex-GST group surcharge in cents for a booking; 0 when none applies. */
-export function groupSurchargeCents(durationHours: number, groupSize: number): number {
-  if (groupSize <= GROUP_SURCHARGE.threshold) return 0;
-  return durationHours <= 1 ? GROUP_SURCHARGE.oneHourCents : GROUP_SURCHARGE.twoHourCents;
-}
-
-export const PRICING_TIERS: Omit<PricingTier, "id">[] = [FLAT_TIER];
-
-/**
- * The four booking options the customer picks from (after the date, before
- * the time). Base prices mirror FLAT_TIER / WEEKDAY_DAYTIME_DEAL / BULK_PACK;
- * the group surcharge (GROUP_SURCHARGE) is added on top where it applies.
- */
 export type BookingOptionId =
   | "1h"
   | "2h"
@@ -104,13 +41,13 @@ export type BookingOption = {
   id: BookingOptionId;
   /** Card title, e.g. "1 hour". */
   label: string;
-  /** Hours scheduled now (the pack books its first 2 hours). */
-  durationHours: 1 | 2;
+  /** Hours scheduled now (the pack books its first session). */
+  durationHours: number;
   /** Base price in cents ex-GST, before any group surcharge. */
   baseCents: number;
-  /** Only weekday starts that keep the session inside 10:00–16:00 qualify. */
+  /** Only weekday starts that keep the session inside the window qualify. */
   weekdayDaytimeOnly: boolean;
-  /** True for the 10-hour pack. */
+  /** True for the prepaid pack. */
   isPack: boolean;
   /**
    * True when the session is paid for with prepaid banked hours (base $0; the
@@ -122,50 +59,84 @@ export type BookingOption = {
   note: string;
 };
 
-export const BOOKING_OPTIONS: BookingOption[] = [
-  {
-    id: "1h",
-    label: "1 hour",
-    durationHours: 1,
-    baseCents: FLAT_TIER.peak_1h_price_cents,
-    weekdayDaytimeOnly: false,
-    isPack: false,
-    note: "A quick one — warm up, run your set.",
-  },
-  {
-    id: "2h",
-    label: "2 hours",
-    durationHours: 2,
-    baseCents: FLAT_TIER.peak_2h_price_cents,
-    weekdayDaytimeOnly: false,
-    isPack: false,
-    note: "Room to properly dig in.",
-  },
-  {
-    id: "2h-daytime",
-    label: "2 hours · weekday daytime (no sub)",
-    durationHours: 2,
-    baseCents: WEEKDAY_DAYTIME_DEAL.twoHourPriceCents,
-    weekdayDaytimeOnly: true,
-    isPack: false,
-    note: "Mon–Fri, sessions inside 10am–4pm. No sub.",
-  },
-  {
-    id: "pack10",
-    label: "10-hour pack",
-    durationHours: BULK_PACK.firstSessionHours,
-    baseCents: BULK_PACK.totalCents,
-    weekdayDaytimeOnly: false,
-    isPack: true,
-    note: "Prepay 10 hours at half rate. Book your first 2-hour session now.",
-  },
-];
+/**
+ * Every cash option, whether or not it's currently on offer. Price calculation
+ * and admin views use this; the customer-facing list is `bookingOptions()`.
+ */
+export function allBookingOptions(s: PricingSettings): BookingOption[] {
+  return [
+    {
+      id: "1h",
+      label: s.options["1h"].label,
+      durationHours: 1,
+      baseCents: s.rates.oneHourCents,
+      weekdayDaytimeOnly: false,
+      isPack: false,
+      note: s.options["1h"].note,
+    },
+    {
+      id: "2h",
+      label: s.options["2h"].label,
+      durationHours: 2,
+      baseCents: s.rates.twoHourCents,
+      weekdayDaytimeOnly: false,
+      isPack: false,
+      note: s.options["2h"].note,
+    },
+    {
+      id: "2h-daytime",
+      label: s.options["2h-daytime"].label,
+      durationHours: 2,
+      baseCents: s.weekdayDeal.twoHourPriceCents,
+      weekdayDaytimeOnly: true,
+      isPack: false,
+      note: s.options["2h-daytime"].note,
+    },
+    {
+      id: "pack10",
+      label: s.options.pack10.label,
+      durationHours: s.pack.firstSessionHours,
+      baseCents: s.pack.totalCents,
+      weekdayDaytimeOnly: false,
+      isPack: true,
+      note: s.options.pack10.note,
+    },
+  ];
+}
 
 /**
- * Banked-hours options — only shown to signed-in customers whose ledger balance
- * covers the duration. Base price is $0 (the ledger is debited); the group
- * surcharge for 5+ still applies in cash. Not part of BOOKING_OPTIONS, so the
- * guest UI is unchanged.
+ * True when an option is currently on offer. The deal card also needs the deal
+ * itself switched on, and the pack card the pack — one switch, not two, is
+ * what the admin panel presents, but both are honoured here so an old row
+ * (deal off, deal card still on) can't put an unbuyable card on the page.
+ */
+export function isOptionOffered(s: PricingSettings, id: BookingOptionId): boolean {
+  switch (id) {
+    case "1h":
+      return s.options["1h"].enabled;
+    case "2h":
+      return s.options["2h"].enabled;
+    case "2h-daytime":
+      return s.options["2h-daytime"].enabled && s.weekdayDeal.enabled;
+    case "pack10":
+      return s.options.pack10.enabled && s.pack.enabled;
+    case "banked-1h":
+    case "banked-2h":
+      // Prepaid hours are the customer's already — never switched off by price
+      // settings. The balance is what gates these.
+      return true;
+  }
+}
+
+/** The cash options a customer can actually pick right now. */
+export function bookingOptions(s: PricingSettings): BookingOption[] {
+  return allBookingOptions(s).filter((o) => isOptionOffered(s, o.id));
+}
+
+/**
+ * Banked-hours options — only shown to signed-in customers whose ledger
+ * balance covers the duration. Base price is $0 (the ledger is debited); the
+ * group surcharge still applies in cash.
  */
 export const BANKED_OPTIONS: BookingOption[] = [
   {
@@ -190,10 +161,20 @@ export const BANKED_OPTIONS: BookingOption[] = [
   },
 ];
 
-export function bookingOption(id: BookingOptionId): BookingOption {
-  const opt = [...BOOKING_OPTIONS, ...BANKED_OPTIONS].find((o) => o.id === id);
+export function bookingOption(s: PricingSettings, id: BookingOptionId): BookingOption {
+  const opt = [...allBookingOptions(s), ...BANKED_OPTIONS].find((o) => o.id === id);
   if (!opt) throw new Error(`Unknown booking option: ${id}`);
   return opt;
+}
+
+/** Ex-GST group surcharge in cents for a booking; 0 when none applies. */
+export function groupSurchargeCents(
+  s: PricingSettings,
+  durationHours: number,
+  groupSize: number,
+): number {
+  if (groupSize <= s.groupSurcharge.threshold) return 0;
+  return durationHours <= 1 ? s.groupSurcharge.oneHourCents : s.groupSurcharge.twoHourCents;
 }
 
 /**
@@ -201,56 +182,60 @@ export function bookingOption(id: BookingOptionId): BookingOption {
  * ex-GST. Pass the START time so a plain "2h" booking still gets the
  * weekday-daytime rate when it happens to qualify (never charge more for
  * picking the generic option); omit it and the standard rate is used.
- * The pack's price is always the full pack ($250+GST) regardless of start.
+ * The pack's price is always the full pack regardless of start.
  */
 export function calcBookingPriceCents(args: {
-  tier: Pick<PricingTier, "peak_1h_price_cents" | "peak_2h_price_cents">;
+  settings: PricingSettings;
   optionId: BookingOptionId;
   start?: Date | string | number | null;
   groupSize: number;
 }): { baseCents: number; surchargeCents: number; totalCents: number } {
-  const { tier, optionId, start, groupSize } = args;
-  const option = bookingOption(optionId);
+  const { settings: s, optionId, start, groupSize } = args;
+  const option = bookingOption(s, optionId);
   let baseCents: number;
   switch (optionId) {
     case "1h":
-      baseCents = tier.peak_1h_price_cents;
+      baseCents = s.rates.oneHourCents;
       break;
     case "2h":
       baseCents =
-        start != null && isWeekdayDaytime(start, 2)
-          ? WEEKDAY_DAYTIME_DEAL.twoHourPriceCents
-          : tier.peak_2h_price_cents;
+        start != null && weekdayDealApplies(s, start, 2)
+          ? s.weekdayDeal.twoHourPriceCents
+          : s.rates.twoHourCents;
       break;
     case "2h-daytime":
-      baseCents = WEEKDAY_DAYTIME_DEAL.twoHourPriceCents;
+      baseCents = s.weekdayDeal.twoHourPriceCents;
       break;
     case "pack10":
-      baseCents = BULK_PACK.totalCents;
+      baseCents = s.pack.totalCents;
       break;
     case "banked-1h":
     case "banked-2h":
       // Paid with prepaid banked hours — the session itself is $0. Any group
-      // surcharge (5+ people) is still charged in cash below.
+      // surcharge is still charged in cash below.
       baseCents = 0;
       break;
   }
-  const surchargeCents = groupSurchargeCents(option.durationHours, groupSize);
+  const surchargeCents = groupSurchargeCents(s, option.durationHours, groupSize);
   return { baseCents, surchargeCents, totalCents: baseCents + surchargeCents };
 }
 
 /**
  * True when a session starting at `start` and running `durationHours` sits
- * entirely inside the weekday-daytime window: Mon–Fri, 10:00–16:00
- * Pacific/Auckland. For the 2-hour deal that means a weekday start between
- * 10:00 and 14:00 inclusive. (Sessions never cross midnight — the studio runs
- * 10:00–24:00 — and NZ DST switches at 2–3am, so plain wall-clock arithmetic
- * is safe here.)
+ * entirely inside the weekday-daytime window (Mon–Fri, between the configured
+ * hours, Pacific/Auckland) AND the deal is switched on. With the default 2-hour
+ * deal and a 10:00–16:00 window that means a weekday start between 10:00 and
+ * 14:00 inclusive. (Sessions never cross midnight — the studio runs 10:00–24:00
+ * — and NZ DST switches at 2–3am, so plain wall-clock arithmetic is safe here.)
  */
-export function isWeekdayDaytime(
+export function weekdayDealApplies(
+  s: PricingSettings,
   start: Date | string | number,
   durationHours = 2,
 ): boolean {
+  if (!s.weekdayDeal.enabled) return false;
+  // The deal is a 2-hour rate; a 1-hour session is already cheaper than it.
+  if (durationHours !== 2) return false;
   const isoDow = Number(formatInTimeZone(start, NZ_TZ, "i")); // 1=Mon … 7=Sun
   if (isoDow > 5) return false;
   const startMinutes =
@@ -258,40 +243,32 @@ export function isWeekdayDaytime(
     Number(formatInTimeZone(start, NZ_TZ, "m"));
   const endMinutes = startMinutes + durationHours * 60;
   return (
-    startMinutes >= WEEKDAY_DAYTIME_DEAL.windowStartHour * 60 &&
-    endMinutes <= WEEKDAY_DAYTIME_DEAL.windowEndHour * 60
+    startMinutes >= s.weekdayDeal.windowStartHour * 60 &&
+    endMinutes <= s.weekdayDeal.windowEndHour * 60
   );
 }
 
 /**
- * Price in cents (ex-GST) for the flat tier. Pass the booking START time so
- * the weekday-daytime 2-hour deal ($60+GST, Mon–Fri inside 10:00–16:00 NZ)
- * can be applied; without a start time the standard rate is charged.
+ * Price in cents (ex-GST) for a session of `durationHours`. Pass the booking
+ * START time so the weekday-daytime 2-hour deal can be applied; without a
+ * start time the standard rate is charged. Used by admin quick-book, where the
+ * duration is typed in rather than picked from an option card.
  */
 export function calcPriceCents(
-  tier: Pick<
-    PricingTier,
-    | "peak_1h_price_cents"
-    | "peak_2h_price_cents"
-    | "peak_extra_hour_price_cents"
-    | "off_peak_multiplier"
-  >,
+  s: PricingSettings,
   durationHours: number,
   start?: Date | string | number | null,
 ): number {
-  if (durationHours <= 1) return tier.peak_1h_price_cents;
+  if (durationHours <= 1) return s.rates.oneHourCents;
   if (durationHours === 2) {
-    if (start != null && isWeekdayDaytime(start, 2)) {
-      return WEEKDAY_DAYTIME_DEAL.twoHourPriceCents;
+    if (start != null && weekdayDealApplies(s, start, 2)) {
+      return s.weekdayDeal.twoHourPriceCents;
     }
-    return tier.peak_2h_price_cents;
+    return s.rates.twoHourCents;
   }
-  // 3+ hours not bookable online; if ever called with one (e.g. admin quick
-  // book), fall back to 2h + (extra hours * 1h). Admin can override on the
-  // booking record after.
-  return (
-    tier.peak_2h_price_cents + (durationHours - 2) * tier.peak_1h_price_cents
-  );
+  // 3+ hours aren't bookable online. Quick-book can still ask for one: charge
+  // 2h + (extra hours × the 1h rate). Admin can override on the booking after.
+  return s.rates.twoHourCents + (durationHours - 2) * s.rates.oneHourCents;
 }
 
 /** NZ GST. All stored prices are ex-GST. */
@@ -325,6 +302,18 @@ export function formatNZDPlusGst(cents: number): string {
  */
 export function formatNZDPlusGstIncl(cents: number): string {
   return `${nzd.format(cents / 100)} + GST (${nzd.format(gstInclusiveCents(cents) / 100)})`;
+}
+
+/**
+ * "10am" / "4pm" / "midnight" from a 24-hour clock hour. Used wherever the
+ * weekday-daytime window is described in copy, so moving the window in the
+ * admin panel moves every sentence that mentions it.
+ */
+export function formatHour(h: number): string {
+  const hour = ((Math.round(h) % 24) + 24) % 24;
+  if (hour === 0) return "midnight";
+  if (hour === 12) return "midday";
+  return hour < 12 ? `${hour}am` : `${hour - 12}pm`;
 }
 
 /** Split currency for the mono pricing display (symbol/amount weighted apart). */

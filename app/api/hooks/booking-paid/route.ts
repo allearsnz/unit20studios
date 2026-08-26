@@ -54,14 +54,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  // Door code + access email both go out ON PAYMENT (not on approval).
+  // Door code + access email both go out ON PAYMENT (not on approval) — and
+  // only while the session is still ahead. A payment that lands after the
+  // session (a late Xero reconciliation) comes back `skipped` and sends
+  // nothing; that is a success, not a failure to retry.
   const result = await runPaidAutomations(record.id);
 
   // A transient send failure is worth a webhook redelivery, so answer 500 and
   // let Supabase retry — the failure is also recorded on the booking now, so
   // it stays visible in /admin whether or not a retry ever succeeds. The other
   // outcomes (no_email, not_found, already_sent) are not fixed by retrying.
-  if (result.access.status === "send_failed") {
+  if (result.access?.status === "send_failed") {
     return NextResponse.json({ error: "send_failed", result }, { status: 500 });
   }
   return NextResponse.json({ ok: true, result });

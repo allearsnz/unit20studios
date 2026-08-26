@@ -1,7 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { nzDateHourToUtc } from "@/lib/timezone";
-import { isWeekdayDaytime } from "@/lib/pricing";
+import { weekdayDealApplies } from "@/lib/pricing";
+import { getPricingSettings } from "@/lib/pricing-store";
+import { dayOpensAt, isBookableStart } from "@/lib/booking-window";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +11,12 @@ const OPEN_HOUR = 10; // studio opens 10:00
 const CLOSE_HOUR = 24; // slots start 10:00 … 23:00
 const BUFFER_MS = 15 * 60 * 1000;
 
-type Span = { start_time: string; end_time: string };
+type Span = { start_time: string; end_time: string; status?: string | null };
+
+/** Sessions that hold a slot. `completed` is fetched too — it's how we know the
+ *  room was opened this morning — but it never blocks, because a completed
+ *  session is behind us. */
+const HOLDS_SLOT = new Set(["pending_verification", "confirmed"]);
 
 export async function GET(req: NextRequest) {
   const date = req.nextUrl.searchParams.get("date");
@@ -20,6 +27,9 @@ export async function GET(req: NextRequest) {
   const dayStart = nzDateHourToUtc(date, 0).getTime();
   const dayEndIso = new Date(dayStart + 24 * 3600 * 1000).toISOString();
   const dayStartIso = new Date(dayStart).toISOString();
+  // Nothing inside the notice window is offered — a start that's an hour away
+  // on a cold day is greyed out exactly like a taken one. `POST /api/bookings`
+  // re-checks against its own clock, so a page left open doesn't get through.
   const now = Date.now();
 
   type RecurRule = { days_of_week: number[]; start_minute: number; end_minute: number };
@@ -34,8 +44,8 @@ export async function GET(req: NextRequest) {
     const [b, bl] = await Promise.all([
       supabase
         .from("bookings")
-        .select("start_time,end_time")
-        .in("status", ["pending_verification", "confirmed"])
+        .select("start_time,end_time,status")
+        .in("status", ["pending_verification", "confirmed", "completed"])
         .lt("start_time", dayEndIso)
         .gt("end_time", dayStartIso),
       supabase
@@ -85,15 +95,28 @@ export async function GET(req: NextRequest) {
 
   const overlaps = (s: number, e: number, bs: number, be: number) => s < be && bs < e;
 
+  // Is someone already opening the room this day? If so, starts from that
+  // point on only need the short notice — the set-up is happening anyway.
+  // The query matches anything *overlapping* the day, so a 23:00–01:00 session
+  // from last night is in `bookings`; it doesn't open this one.
+  const opensAt = dayOpensAt(
+    bookings.filter((b) => new Date(b.start_time).getTime() >= dayStart),
+  );
+
+  // Only the weekday-deal flag needs prices here; it still has to be the live
+  // ones, or the picker offers a deal the booking API would refuse.
+  const pricing = await getPricingSettings();
+
   const slots = [];
   for (let h = OPEN_HOUR; h < CLOSE_HOUR; h++) {
     const start = nzDateHourToUtc(date, h);
     const startMs = start.getTime();
     const endMs = startMs + 3600 * 1000;
 
-    let available = startMs > now && !gearBlocked;
+    let available = isBookableStart(startMs, opensAt, now) && !gearBlocked;
     if (available) {
       for (const bk of bookings) {
+        if (!HOLDS_SLOT.has(bk.status ?? "confirmed")) continue;
         const bs = new Date(bk.start_time).getTime() - BUFFER_MS;
         const be = new Date(bk.end_time).getTime() + BUFFER_MS;
         if (overlaps(startMs, endMs, bs, be)) {
@@ -128,10 +151,18 @@ export async function GET(req: NextRequest) {
       end: new Date(endMs).toISOString(),
       available,
       // A 2-hour session starting here qualifies for the weekday-daytime
-      // deal ($60+GST, Mon–Fri inside 10:00–16:00 NZ).
-      deal_2h: isWeekdayDaytime(start, 2),
+      // deal — false throughout when the deal is switched off in /admin/pricing,
+      // which is what greys out the deal option card.
+      deal_2h: weekdayDealApplies(pricing, start, 2),
     });
   }
 
-  return NextResponse.json({ date, slots });
+  // `opensAt` goes back so the picker can say *why* short-notice starts are
+  // open ("someone's in from 2pm") instead of contradicting the 4-hour line
+  // it printed on the step before.
+  return NextResponse.json({
+    date,
+    slots,
+    opensAt: opensAt !== null ? new Date(opensAt).toISOString() : null,
+  });
 }

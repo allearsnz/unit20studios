@@ -392,12 +392,20 @@ export function buildSteps(
   // stamp; `access_last_attempt_at` is what separates a failure from a send
   // that was never attempted — which, on a paid booking, means the paid
   // Database Webhook is not wired up.
+  //
+  // Except once the session is over. The email is a set of directions to a room
+  // and a promise of a door code, so a payment reconciled after the fact
+  // deliberately sends none of it (lib/booking-paid.ts) — the same rule the
+  // crew-side door-code trigger has always had. A never-attempted send is then
+  // correct, not a fault, and must not sit here amber forever. An attempt that
+  // was made and failed still reports, because that one really did go wrong.
+  const accessNeverDue = (cancelled || ended) && !b.access_last_attempt_at;
   steps.push({
     key: "access_email",
     label: "Access instructions emailed",
     state: b.access_sent_at
       ? "done"
-      : cancelled
+      : accessNeverDue
         ? "na"
         : !paid
           ? "pending"
@@ -405,8 +413,12 @@ export function buildSteps(
     at: b.access_sent_at,
     detail: b.access_sent_at
       ? "Where to go, what to bring, and that the code arrives separately."
-      : cancelled
-        ? "Booking cancelled."
+      : accessNeverDue
+        ? cancelled
+          ? "Booking cancelled — nothing was sent."
+          : paid
+            ? "The session had already finished when it was paid, so nothing was sent. Directions to a room they've already played in aren't worth an email."
+            : "The session has been and gone unpaid, so this was never sent."
         : !paid
           ? "Sends the moment you mark this paid."
           : b.access_send_error
@@ -416,7 +428,12 @@ export function buildSteps(
               : !customerEmail
                 ? "This customer has no email address on file, so nothing can be sent."
                 : "Paid, but nothing has ever tried to send. Check the bookings paid Database Webhook in Supabase.",
-    action: !b.access_sent_at && paid && !cancelled && customerEmail ? "retry_access_email" : undefined,
+    // No retry once the session is over: re-sending is only ever the right
+    // answer while the customer still has to get in.
+    action:
+      !b.access_sent_at && paid && !cancelled && !ended && customerEmail
+        ? "retry_access_email"
+        : undefined,
   });
 
   // --------------------------------------------------------------- reminder

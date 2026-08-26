@@ -46,7 +46,10 @@ export const bookingInputSchema = z.object({
   optionId: z
     .enum(["1h", "2h", "2h-daytime", "pack10", "banked-1h", "banked-2h"])
     .optional(),
-  groupSize: z.number().int().min(1).max(8),
+  /** Sanity bound only. The real cap is `room.maxGroupSize` in the live
+   *  pricing settings, checked in the route — hard-coding 8 here meant raising
+   *  the room's capacity in the admin panel produced a form error instead. */
+  groupSize: z.number().int().min(1).max(30),
   name: z.string().trim().min(2, "Tell us your name").max(120),
   email: z.string().trim().toLowerCase().email("Check your email address").max(180),
   phone: z

@@ -4,7 +4,7 @@
 export const STUDIO_TERMS: { title: string; body: string }[] = [
   {
     title: "Booking & payment",
-    body: "Sessions are booked online and confirmed by email. Payment is taken in person at the start of your session (card or cash) unless we've arranged otherwise. The price shown covers the whole room — groups of five or more add a small flat surcharge ($20+GST on a 1-hour session, $30+GST on 2 hours), shown before you confirm.",
+    body: "Sessions are booked online and confirmed by email, and online booking closes 4 hours before a session starts so we can have the room set up for you — or half an hour before, if the studio is already open that day for an earlier session. Payment is taken in person at the start of your session (card or cash) unless we've arranged otherwise. The price shown covers the whole room — groups of five or more add a small flat surcharge ($20+GST on a 1-hour session, $30+GST on 2 hours), shown before you confirm.",
   },
   {
     title: "First booking & ID",

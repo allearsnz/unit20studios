@@ -22,11 +22,15 @@ import { createAdminClient } from "./supabase/admin";
  *
  * Best-effort throughout: nothing in here throws, because a failed email must
  * never leave the booking un-marked as paid.
+ *
+ * AND IT ONLY RUNS WHILE THERE IS STILL A SESSION TO GET INTO — see
+ * `skipReason`. Payment on a finished or cancelled booking is bookkeeping, and
+ * marking it paid sends nothing.
  */
 
 export type PaidAutomationResult = {
-  /** What the access-instructions email did. */
-  access: AccessSendResult;
+  /** What the access-instructions email did — null when it wasn't sent at all. */
+  access: AccessSendResult | null;
   /**
    * Whether the door-code mint was successfully *kicked*. This is NOT "a code
    * exists" — the edge function mints asynchronously against TTLock and records
@@ -34,7 +38,18 @@ export type PaidAutomationResult = {
    * this flag only says whether we managed to ask.
    */
   doorCodeKicked: boolean;
+  /** Set when nothing was sent, and why. Null when the chain actually ran. */
+  skipped: PaidSkipReason | null;
 };
+
+/**
+ * Why a payment sent nothing.
+ *
+ * Both are the same shape of fact: there is no session left to let anyone into.
+ * A booking squared up after the fact is bookkeeping, and a cancelled one is
+ * void — neither customer needs directions to a room they aren't going to.
+ */
+export type PaidSkipReason = "session_ended" | "cancelled";
 
 /**
  * Mint + email the studio door code the moment payment lands. The crew-side DB
@@ -67,8 +82,47 @@ export async function issuePendingDoorCodes(): Promise<boolean> {
   }
 }
 
+/**
+ * Has this payment landed too late to be worth telling the customer about?
+ *
+ * The crew-side trigger already answers this for the door code: it only
+ * enqueues one while `end_time > now()` and never for a cancelled booking, so a
+ * session squared up afterwards silently gets no code. The access email had no
+ * such rule and went out regardless — which meant reconciling last month's
+ * unpaid session emailed that customer directions, a "your code arrives
+ * separately" line that was never true, and a bring-your-headphones list for a
+ * night they had already played. Marking paid after the fact is bookkeeping.
+ *
+ * So the same condition now gates the whole chain, and it is read from the row
+ * rather than passed in, because both callers (this app's admin action and the
+ * paid Database Webhook, which covers Xero and the crew Studio tab) must reach
+ * the same answer.
+ */
+async function skipReason(bookingId: string): Promise<PaidSkipReason | null> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("bookings")
+      .select("end_time, status")
+      .eq("id", bookingId)
+      .maybeSingle();
+    const booking = data as { end_time: string; status: string } | null;
+    if (!booking) return null; // Unreadable: fall through and let the sender report it.
+    if (booking.status === "cancelled") return "cancelled";
+    if (new Date(booking.end_time).getTime() <= Date.now()) return "session_ended";
+    return null;
+  } catch (e) {
+    // A failed read must not turn into a silently-skipped send.
+    console.error("[booking-paid] couldn't read booking to check timing", e);
+    return null;
+  }
+}
+
 /** Run the post-payment chain for one booking. Never throws. */
 export async function runPaidAutomations(bookingId: string): Promise<PaidAutomationResult> {
+  const skipped = await skipReason(bookingId);
+  if (skipped) return { access: null, doorCodeKicked: false, skipped };
+
   // Door code first: it is the thing with a deadline (an offline TTLock code
   // has to exist before the customer is standing at the keypad), and the access
   // email's "your code arrives separately" line is only true if we've asked.
@@ -85,5 +139,5 @@ export async function runPaidAutomations(bookingId: string): Promise<PaidAutomat
     access = { status: "send_failed", friendlyId: "", error: e instanceof Error ? e.message : "unknown" };
   }
 
-  return { access, doorCodeKicked };
+  return { access, doorCodeKicked, skipped: null };
 }

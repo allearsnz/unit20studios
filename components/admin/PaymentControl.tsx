@@ -20,6 +20,13 @@ const OPTIONS: PaymentStatus[] = ["unpaid", "paid", "refunded", "comped"];
  * whom, then report what actually came back. The other three statuses send
  * nothing and stay one tap, because a confirmation nobody needs is a
  * confirmation everybody clicks through.
+ *
+ * AND WHEN THE SESSION IS ALREADY OVER, PAID SENDS NOTHING EITHER. Squaring up
+ * last week's session is bookkeeping: there is no door code to mint (the crew
+ * trigger only enqueues one while the session is ahead) and directions to a
+ * room someone has already played in are noise. That case used to be a warning
+ * you had to read and accept before emailing them anyway; now it is one tap and
+ * a line saying nothing went out. Same for a cancelled booking.
  */
 export function PaymentControl({
   id,
@@ -38,6 +45,12 @@ export function PaymentControl({
   const [pending, start] = useTransition();
   const [confirming, setConfirming] = useState(false);
   const [result, setResult] = useState<PaymentUpdateResult | null>(null);
+
+  // Nothing is sent for a session that has been and gone, or one that was
+  // cancelled — so there is nothing to confirm. This mirrors the same condition
+  // the server checks (lib/booking-paid.ts `skipReason`); the server is what
+  // actually decides, this only decides whether to ask first.
+  const sendsNothing = cancelled || sessionEnded;
 
   // No `router.refresh()`: `setPaymentStatus` revalidates this page, so its
   // result arrives with the page already re-rendered. Refreshing on top of that
@@ -61,9 +74,10 @@ export function PaymentControl({
             aria-pressed={value === opt}
             onClick={() => {
               setResult(null);
-              // Only the not-paid → paid move sends anything; everything else,
-              // including re-selecting the status it's already on, is silent.
-              if (opt === "paid" && value !== "paid") setConfirming(true);
+              // Only the not-paid → paid move on a session that is still ahead
+              // sends anything; everything else, including re-selecting the
+              // status it's already on, is silent and goes straight through.
+              if (opt === "paid" && value !== "paid" && !sendsNothing) setConfirming(true);
               else apply(opt);
             }}
             className={cn(
@@ -86,21 +100,10 @@ export function PaymentControl({
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-text-muted" aria-hidden />
               <span>
                 <strong className="font-semibold">Their door code.</strong>{" "}
-                {cancelled ? (
-                  <span className="text-text-muted">
-                    Not for this one — cancelled bookings never get a code.
-                  </span>
-                ) : sessionEnded ? (
-                  <span className="text-text-muted">
-                    Not for this one — the session has already finished, so no code
-                    is issued. You&apos;ll need to let them in another way.
-                  </span>
-                ) : (
-                  <span className="text-text-muted">
-                    Minted against the studio lock for the booked window only, then
-                    emailed by the crew system. Usually within a minute.
-                  </span>
-                )}
+                <span className="text-text-muted">
+                  Minted against the studio lock for the booked window only, then
+                  emailed by the crew system. Usually within a minute.
+                </span>
               </span>
             </li>
             <li className="flex gap-2">
@@ -152,11 +155,19 @@ export function PaymentControl({
 
       {result ? <Outcome result={result} /> : null}
 
-      <p className="mt-4 text-xs text-text-dim">
-        Every step that follows a payment — code minted, code emailed, access email
-        sent — is listed under{" "}
-        <strong className="text-text-muted">Automation</strong>, with timestamps.
-      </p>
+      {sendsNothing && value !== "paid" ? (
+        <p className="mt-4 text-xs text-text-dim">
+          {cancelled
+            ? "This booking is cancelled, so marking it paid emails nothing — it just records the money."
+            : "This session has already finished, so marking it paid emails nothing — no door code, no access instructions. It just records the money."}
+        </p>
+      ) : (
+        <p className="mt-4 text-xs text-text-dim">
+          Every step that follows a payment — code minted, code emailed, access
+          email sent — is listed under{" "}
+          <strong className="text-text-muted">Automation</strong>, with timestamps.
+        </p>
+      )}
     </div>
   );
 }
@@ -167,6 +178,23 @@ export function PaymentControl({
  * real, and different, problem.
  */
 function Outcome({ result }: { result: PaymentUpdateResult }) {
+  // Nothing was attempted, so there is nothing to report per-email. Say that
+  // plainly rather than render two rows about sends that never happened.
+  if (result.skipped) {
+    return (
+      <div aria-live="polite" className="mt-4 border border-border bg-bg-elev p-4">
+        <Line
+          ok
+          text={
+            result.skipped === "cancelled"
+              ? "Marked paid. Nothing was emailed — the booking is cancelled."
+              : "Marked paid. Nothing was emailed — the session has already finished."
+          }
+        />
+      </div>
+    );
+  }
+
   const accessOk = result.access === "sent" || result.access === "already_sent";
   const accessLine =
     result.access === "sent"

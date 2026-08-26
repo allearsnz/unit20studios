@@ -6,7 +6,8 @@ import { sendEmail, notifyAdmin, icsAttachment } from "./email";
 import { createAdminClient } from "./supabase/admin";
 import { buildBookingIcs } from "./ics";
 import { formatBookingWhen } from "./timezone";
-import { BULK_PACK, formatNZDPlusGst, formatNZDPlusGstIncl } from "./pricing";
+import { formatNZDPlusGst, formatNZDPlusGstIncl } from "./pricing";
+import { getPricingSettings } from "./pricing-store";
 import { site } from "./site";
 import type { Booking, Customer, PricingTier } from "./types";
 
@@ -29,8 +30,11 @@ export async function sendBookingCreatedEmails(opts: {
   const total = formatNZDPlusGstIncl(booking.total_price_cents);
   const manageUrl = `${site.url}/studio/book/confirmation?id=${booking.friendly_id}`;
   const surchargeLabel = surchargeCents > 0 ? `+${formatNZDPlusGst(surchargeCents)}` : null;
+  // The pack's size and price are admin-editable, so the email says whatever
+  // was actually sold rather than a number baked in here.
+  const pack = (await getPricingSettings()).pack;
   const packNote = isPack
-    ? `You're on the 10-hour pack (${formatNZDPlusGst(BULK_PACK.totalCents)}). This booking uses the first ${booking.duration_hours} hours — we'll be in touch to sort the rest of your hours across future visits.`
+    ? `You're on the ${pack.packHours}-hour pack (${formatNZDPlusGst(pack.totalCents)}). This booking uses the first ${booking.duration_hours} hours — we'll be in touch to sort the rest of your hours across future visits.`
     : null;
 
   const props = {
@@ -75,7 +79,9 @@ export async function sendBookingCreatedEmails(opts: {
     ...(rateNote ? [`Rate: ${rateNote}`] : []),
     ...(surchargeLabel ? [`Group surcharge: ${surchargeLabel} (included in total)`] : []),
     ...(isPack
-      ? [`10-HOUR PACK — first session only; ${BULK_PACK.packHours - booking.duration_hours}h remain to arrange.`]
+      ? [
+          `${pack.packHours}-HOUR PACK — first session only; ${pack.packHours - booking.duration_hours}h remain to arrange.`,
+        ]
       : []),
     `Total: ${total}`,
     `Status: ${booking.status}${pending ? " (NEW CUSTOMER — needs verification)" : ""}`,
@@ -85,7 +91,7 @@ export async function sendBookingCreatedEmails(opts: {
   ].join("\n");
 
   await notifyAdmin(
-    `New booking${isPack ? " [10H PACK]" : ""} [${booking.status === "confirmed" ? "CONFIRMED" : "PENDING"}] — ${booking.friendly_id} ${customer.name}`,
+    `New booking${isPack ? ` [${pack.packHours}H PACK]` : ""} [${booking.status === "confirmed" ? "CONFIRMED" : "PENDING"}] — ${booking.friendly_id} ${customer.name}`,
     text,
   );
 }

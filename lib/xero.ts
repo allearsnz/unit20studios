@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { BULK_PACK, groupSurchargeCents } from "./pricing";
+import { groupSurchargeCents } from "./pricing";
+import { getPricingSettings } from "./pricing-store";
 
 /**
  * Xero webhook + Accounting API helpers.
@@ -278,16 +279,17 @@ export async function createBookingInvoice(
   // `total_price_cents` is net of any discount. Rebuild the GROSS subtotal so the
   // base/surcharge lines show the pre-discount figures and the discount appears
   // as its own negative line; the invoice still totals the net amount.
+  const pricing = await getPricingSettings();
   const discountCents = booking.discount_amount_cents ?? 0;
   const grossTotal = booking.total_price_cents + discountCents;
-  const surchargeCents = groupSurchargeCents(booking.duration_hours, booking.group_size);
+  const surchargeCents = groupSurchargeCents(pricing, booking.duration_hours, booking.group_size);
   const baseCents = grossTotal - surchargeCents;
-  const isPack = baseCents === BULK_PACK.totalCents;
+  const isPack = baseCents === pricing.pack.totalCents;
 
   const lineItems: Record<string, unknown>[] = [
     {
       Description: isPack
-        ? `Studio 10-hour pack (prepaid) — first session ${whenLabel} (${booking.duration_hours}h)`
+        ? `Studio ${pricing.pack.packHours}-hour pack (prepaid) — first session ${whenLabel} (${booking.duration_hours}h)`
         : `Studio session — ${whenLabel} (${booking.duration_hours}h)`,
       Quantity: 1,
       UnitAmount: (baseCents / 100).toFixed(2),

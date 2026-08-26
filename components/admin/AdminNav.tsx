@@ -2,12 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarClock, CalendarOff, LayoutList, TicketPercent, Users, Zap } from "lucide-react";
+import {
+  Banknote,
+  CalendarClock,
+  CalendarOff,
+  LayoutList,
+  TicketPercent,
+  Users,
+  Zap,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
   { label: "Bookings", href: "/admin", icon: LayoutList, exact: true },
   { label: "Customers", href: "/admin/customers", icon: Users },
+  { label: "Pricing", href: "/admin/pricing", icon: Banknote },
   { label: "Discounts", href: "/admin/discounts", icon: TicketPercent },
   { label: "Blackouts", href: "/admin/blackouts", icon: CalendarOff },
   { label: "Quick book", href: "/admin/quick-book", icon: Zap },

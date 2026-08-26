@@ -145,13 +145,20 @@ export function bookingProgress(b: ProgressInput, now: number = Date.now()): Boo
   // arrives in a separate email from the lock system, and promising a code in a
   // step that only tracks the instructions email is how someone ends up at a
   // keypad with nothing to type.
+  //
+  // Once the session is over, an unsent one is `skipped`, not `current`: the
+  // email only goes out while there's still a session to get into (a payment
+  // squared up afterwards sends nothing — see lib/booking-paid.ts), and leaving
+  // this step lit would promise an email that is never coming.
   steps.push({
     key: "access",
     label: "How to get in",
-    state: b.access_sent_at ? "done" : paid ? "current" : "upcoming",
+    state: b.access_sent_at ? "done" : ended ? "skipped" : paid ? "current" : "upcoming",
     detail: b.access_sent_at
       ? "Sent — check your inbox. Your door code comes in its own email."
-      : "Once payment's settled we'll email where to go and your door code.",
+      : ended
+        ? "Nothing to send — your session's already been."
+        : "Once payment's settled we'll email where to go and your door code.",
   });
 
   // 6 ------------------------------------------------------------- session

@@ -8,11 +8,11 @@ import { BookingProgress } from "@/components/account/BookingProgress";
 import { CreateAccountCta } from "@/components/account/CreateAccountCta";
 import { formatBookingWhen } from "@/lib/timezone";
 import {
-  BULK_PACK,
   formatNZDPlusGst,
   formatNZDPlusGstIncl,
   groupSurchargeCents,
 } from "@/lib/pricing";
+import { getPricingSettings } from "@/lib/pricing-store";
 import { site } from "@/lib/site";
 import type { BookingStatus, PaymentStatus } from "@/lib/types";
 
@@ -50,9 +50,10 @@ export default async function ConfirmationPage({
   // In parallel: the booking, and whether they're already signed in. The second
   // decides only whether to show the sign-up card, so it must never hold up the
   // first — and a failure to read it must never cost anyone their confirmation.
-  const [booking, session] = await Promise.all([
+  const [booking, session, pricing] = await Promise.all([
     loadBooking(id),
     getCustomerSession().catch(() => null),
+    getPricingSettings(),
   ]);
 
   const confirmed = booking?.status === "confirmed";
@@ -74,11 +75,11 @@ export default async function ConfirmationPage({
         banked: booking.banked_hours_used > 0,
       })
     : null;
-  // A 10-hour pack booking carries the full pack price as its total — no
-  // ordinary 1–2h booking gets anywhere near it.
-  const isPack = !!booking && booking.total_price_cents >= BULK_PACK.totalCents;
+  // A pack booking carries the full pack price as its total — no ordinary
+  // 1–2h booking gets anywhere near it.
+  const isPack = !!booking && booking.total_price_cents >= pricing.pack.totalCents;
   const surcharge = booking
-    ? groupSurchargeCents(booking.duration_hours, booking.group_size)
+    ? groupSurchargeCents(pricing, booking.duration_hours, booking.group_size)
     : 0;
 
   return (
@@ -121,7 +122,7 @@ export default async function ConfirmationPage({
               label="Duration"
               value={
                 isPack
-                  ? `${booking.duration_hours}h now · ${BULK_PACK.packHours - booking.duration_hours}h to arrange`
+                  ? `${booking.duration_hours}h now · ${pricing.pack.packHours - booking.duration_hours}h to arrange`
                   : `${booking.duration_hours}h`
               }
             />
@@ -147,9 +148,9 @@ export default async function ConfirmationPage({
 
         {booking && isPack ? (
           <p className="mt-6 max-w-md text-sm text-text-muted">
-            You&apos;re on the 10-hour pack — this booking uses your first{" "}
+            You&apos;re on the {pricing.pack.packHours}-hour pack — this booking uses your first{" "}
             {booking.duration_hours} hours. The remaining{" "}
-            {BULK_PACK.packHours - booking.duration_hours} hours are used across
+            {pricing.pack.packHours - booking.duration_hours} hours are used across
             future visits; we&apos;ll be in touch to arrange them with you.
           </p>
         ) : null}

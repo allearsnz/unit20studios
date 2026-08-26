@@ -6,23 +6,30 @@ import { ParallaxPhoto } from "@/components/studio/ParallaxPhoto";
 import { JsonLd } from "@/components/seo/JsonLd";
 import { PhotoBand } from "@/components/ui/PhotoBand";
 import { Section, SectionHeading } from "@/components/ui/Section";
-import { BULK_PACK, FLAT_TIER, WEEKDAY_DAYTIME_DEAL, formatNZDPlusGst } from "@/lib/pricing";
+import { formatNZDPlusGst, packHourlyCents } from "@/lib/pricing";
+import { getPublicPricingSettings } from "@/lib/pricing-store";
+import type { PricingSettings } from "@/lib/pricing-settings";
 import { site } from "@/lib/site";
 
-export const metadata: Metadata = {
-  title: {
-    absolute: "Unit 20 — DJ studio & equipment hire · Christchurch",
-  },
-  description:
-    "A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 10am–midnight. $50+GST an hour, $80+GST for two — weekday daytime (Mon–Fri, 10am–4pm, no sub) two-hour sessions just $60+GST.",
-  alternates: { canonical: "/" },
-  openGraph: {
-    title: "Unit 20 — DJ studio & equipment hire",
-    description:
-      "Practise on real club gear. Christchurch's DJ studio and equipment hire house.",
-    url: "/",
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const p = await getPublicPricingSettings();
+  const deal = p.weekdayDeal.enabled
+    ? ` — ${p.weekdayDeal.label.toLowerCase()} two-hour sessions just ${formatNZDPlusGst(p.weekdayDeal.twoHourPriceCents)}`
+    : "";
+  return {
+    title: {
+      absolute: "Unit 20 — DJ studio & equipment hire · Christchurch",
+    },
+    description: `A DJ practice studio in central Christchurch: four Pioneer CDJ-3000s, a DJM-A9 mixer and QSC monitoring. Book by the hour, 10am–midnight. ${formatNZDPlusGst(p.rates.oneHourCents)} an hour, ${formatNZDPlusGst(p.rates.twoHourCents)} for two${deal}.`,
+    alternates: { canonical: "/" },
+    openGraph: {
+      title: "Unit 20 — DJ studio & equipment hire",
+      description:
+        "Practise on real club gear. Christchurch's DJ studio and equipment hire house.",
+      url: "/",
+    },
+  };
+}
 
 const GEAR = [
   {
@@ -96,7 +103,8 @@ const organizationLd = {
   ],
 };
 
-const serviceLd = {
+function serviceLd(p: PricingSettings) {
+  return {
   "@context": "https://schema.org",
   "@type": "Service",
   name: "DJ practice studio hire",
@@ -112,32 +120,38 @@ const serviceLd = {
     {
       "@type": "Offer",
       name: "1 hour studio session",
-      price: (FLAT_TIER.peak_1h_price_cents / 100).toFixed(2),
+      price: (p.rates.oneHourCents / 100).toFixed(2),
       priceCurrency: "NZD",
       url: `${site.url}/studio/book`,
     },
     {
       "@type": "Offer",
       name: "2 hour studio session",
-      price: (FLAT_TIER.peak_2h_price_cents / 100).toFixed(2),
+      price: (p.rates.twoHourCents / 100).toFixed(2),
       priceCurrency: "NZD",
       url: `${site.url}/studio/book`,
     },
-    {
-      "@type": "Offer",
-      name: `2 hour studio session — ${WEEKDAY_DAYTIME_DEAL.label}`,
-      price: (WEEKDAY_DAYTIME_DEAL.twoHourPriceCents / 100).toFixed(2),
-      priceCurrency: "NZD",
-      url: `${site.url}/studio/book`,
-    },
+    ...(p.weekdayDeal.enabled
+      ? [
+          {
+            "@type": "Offer",
+            name: `2 hour studio session — ${p.weekdayDeal.label}`,
+            price: (p.weekdayDeal.twoHourPriceCents / 100).toFixed(2),
+            priceCurrency: "NZD",
+            url: `${site.url}/studio/book`,
+          },
+        ]
+      : []),
   ],
-};
+  };
+}
 
-export default function HomePage() {
+export default async function HomePage() {
+  const p = await getPublicPricingSettings();
   return (
     <>
       <JsonLd data={organizationLd} />
-      <JsonLd data={serviceLd} />
+      <JsonLd data={serviceLd(p)} />
 
       {/* hero */}
       <section className="relative overflow-hidden border-b border-border">
@@ -172,12 +186,12 @@ export default function HomePage() {
               <div className="flex flex-col gap-1">
                 <Users className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Capacity</dt>
-                <dd>Up to 8</dd>
+                <dd>Up to {p.room.maxGroupSize}</dd>
               </div>
               <div className="flex flex-col gap-1">
                 <Banknote className="h-4 w-4 text-accent" aria-hidden />
                 <dt className="sr-only">Price from</dt>
-                <dd>$50+GST/hr</dd>
+                <dd>{formatNZDPlusGst(p.rates.oneHourCents)}/hr</dd>
               </div>
               <div className="flex flex-col gap-1">
                 <MapPin className="h-4 w-4 text-accent" aria-hidden />
@@ -221,57 +235,64 @@ export default function HomePage() {
                 Pay as you go
               </h3>
               <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
-                Up to 8 people
+                {p.room.label}
               </span>
             </div>
             <div className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-sm border border-border bg-border">
-              <PriceCell label="1 hour" value={formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents)} />
-              <PriceCell label="2 hours" value={formatNZDPlusGst(FLAT_TIER.peak_2h_price_cents)} />
-              <PriceCell
-                className="col-span-2"
-                label={`2 hours · ${WEEKDAY_DAYTIME_DEAL.label}`}
-                value={formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}
-                accent
-              />
+              <PriceCell label="1 hour" value={formatNZDPlusGst(p.rates.oneHourCents)} />
+              <PriceCell label="2 hours" value={formatNZDPlusGst(p.rates.twoHourCents)} />
+              {p.weekdayDeal.enabled ? (
+                <PriceCell
+                  className="col-span-2"
+                  label={`2 hours · ${p.weekdayDeal.label}`}
+                  value={formatNZDPlusGst(p.weekdayDeal.twoHourPriceCents)}
+                  accent
+                />
+              ) : null}
             </div>
             <p className="mt-5 font-mono text-meta uppercase tracking-meta text-text-muted">
-              Groups of 5–8 add $20+GST (1h) / $30+GST (2h) — added
+              Groups of {p.groupSurcharge.threshold + 1}–{p.room.maxGroupSize} add{" "}
+              {formatNZDPlusGst(p.groupSurcharge.oneHourCents)} (1h) /{" "}
+              {formatNZDPlusGst(p.groupSurcharge.twoHourCents)} (2h) — added
               automatically when you book.
             </p>
           </div>
 
           {/* Bulk pack */}
-          <div className="card relative overflow-hidden p-7 md:p-9">
-            <div
-              className="pointer-events-none absolute inset-0"
-              aria-hidden
-              style={{
-                background:
-                  "radial-gradient(80% 100% at 90% 0%, rgba(61,220,151,0.08), transparent 60%)",
-              }}
-            />
-            <div className="relative">
-              <div className="flex items-baseline justify-between">
-                <h3 className="font-display text-h3 font-semibold text-text">
-                  10-hour bulk pack
-                </h3>
-                <span className="font-mono text-meta uppercase tracking-meta text-accent">
-                  Best value
-                </span>
+          {p.pack.enabled ? (
+            <div className="card relative overflow-hidden p-7 md:p-9">
+              <div
+                className="pointer-events-none absolute inset-0"
+                aria-hidden
+                style={{
+                  background:
+                    "radial-gradient(80% 100% at 90% 0%, rgba(61,220,151,0.08), transparent 60%)",
+                }}
+              />
+              <div className="relative">
+                <div className="flex items-baseline justify-between">
+                  <h3 className="font-display text-h3 font-semibold text-text">
+                    {p.pack.packHours}-hour bulk pack
+                  </h3>
+                  <span className="font-mono text-meta uppercase tracking-meta text-accent">
+                    Best value
+                  </span>
+                </div>
+                <p className="mono mt-6 text-h2 text-text">
+                  {formatNZDPlusGst(packHourlyCents(p))}
+                  <span className="ml-2 font-sans text-meta uppercase tracking-meta text-text-muted">
+                    / hour
+                  </span>
+                </p>
+                <p className="lead mt-3 text-sm text-pretty">
+                  Prepay {p.pack.packHours} hours and use them whenever — well under
+                  the standard rate. Book online: you pick your first{" "}
+                  {p.pack.firstSessionHours}-hour session and we sort the rest with
+                  you.
+                </p>
               </div>
-              <p className="mono mt-6 text-h2 text-text">
-                {formatNZDPlusGst(BULK_PACK.hourlyCents)}
-                <span className="ml-2 font-sans text-meta uppercase tracking-meta text-text-muted">
-                  / hour
-                </span>
-              </p>
-              <p className="lead mt-3 text-sm text-pretty">
-                Prepay 10 hours and use them whenever — half the standard rate.
-                Book online: you pick your first 2-hour session and we sort the
-                rest with you.
-              </p>
             </div>
-          </div>
+          ) : null}
         </div>
       </Section>
 

@@ -17,22 +17,21 @@ import { DiscountField, type DiscountState } from "./DiscountField";
 import { detailsSchema, type DetailsValues, type Slot } from "./types";
 import {
   BANKED_OPTIONS,
-  BOOKING_OPTIONS,
-  BULK_PACK,
-  FLAT_LIMITS,
-  FLAT_TIER,
-  GROUP_SURCHARGE,
-  WEEKDAY_DAYTIME_DEAL,
+  TIER_SLUG,
   bookingOption,
+  bookingOptions,
   calcBookingPriceCents,
   formatNZD,
   formatNZDPlusGst,
   formatNZDPlusGstIncl,
-  isWeekdayDaytime,
+  formatHour,
+  weekdayDealApplies,
   type BookingOption,
   type BookingOptionId,
+  type PricingSettings,
 } from "@/lib/pricing";
 import { formatNZ } from "@/lib/timezone";
+import { MIN_NOTICE_HOURS, MIN_NOTICE_NOTE } from "@/lib/booking-window";
 import { getStoredSource } from "@/lib/attribution";
 import { cn } from "@/lib/utils";
 
@@ -60,7 +59,6 @@ const STEP = { DATE: 0, OPTION: 1, TIME: 2, DETAILS: 3, REVIEW: 4 } as const;
 const DETAIL_FIELDS = ["name", "email", "phone", "dob", "customerNote"] as const satisfies readonly (keyof DetailsValues)[];
 const STEPS = ["Date", "Option", "Time", "Details", "Review"];
 
-const PACK_SUMMARY_NOTE = `10-hour pack: this books your first ${BULK_PACK.firstSessionHours} hours — the other ${BULK_PACK.packHours - BULK_PACK.firstSessionHours} bank to your account, and you can draw them down whenever suits.`;
 
 function nzToday() {
   return formatNZ(new Date(), "yyyy-MM-dd");
@@ -126,18 +124,29 @@ function scrollWindowTo(top: number, duration: number) {
   requestAnimationFrame(tick);
 }
 
-export function BookingFlow({ account }: { account?: BookingAccount | null }) {
+export function BookingFlow({
+  account,
+  pricing,
+}: {
+  account?: BookingAccount | null;
+  /** The live price list, read on the server and handed down (see
+   *  `lib/pricing-settings.ts`). Everything money-shaped on this screen — the
+   *  option cards, the hints, the running total — comes from here. */
+  pricing: PricingSettings;
+}) {
   const router = useRouter();
   const min = nzToday();
   const max = addDaysStr(min, 90);
 
   const bankedHours = account?.bankedHours ?? 0;
+  const packSummaryNote = `${pricing.pack.packHours}-hour pack: this books your first ${pricing.pack.firstSessionHours} hours — the other ${pricing.pack.packHours - pricing.pack.firstSessionHours} bank to your account, and you can draw them down whenever suits.`;
 
-  // Standard options always; banked options only when the balance covers them.
+  // Whatever's switched on right now; banked options only when the balance
+  // covers them.
   const availableOptions = useMemo<BookingOption[]>(() => {
     const banked = bankedHours > 0 ? BANKED_OPTIONS.filter((o) => bankedHours >= o.durationHours) : [];
-    return [...BOOKING_OPTIONS, ...banked];
-  }, [bankedHours]);
+    return [...bookingOptions(pricing), ...banked];
+  }, [bankedHours, pricing]);
 
   const reduce = useReducedMotion();
   const [step, setStep] = useState(0);
@@ -145,6 +154,9 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const [dir, setDir] = useState<1 | -1>(1);
   const [date, setDate] = useState<string | null>(null);
   const [slots, setSlots] = useState<Slot[]>([]);
+  /** When the room is already being opened on the chosen day (ISO), if it is —
+   *  that's what lets late starts through, so the hints have to say it. */
+  const [opensAt, setOpensAt] = useState<string | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [option, setOption] = useState<BookingOptionId | null>(null);
@@ -185,15 +197,20 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
         if (cancelled) return;
         const next = (d.slots as Slot[]) ?? [];
         setSlots(next);
+        setOpensAt((d.opensAt as string | null) ?? null);
         // Drop an option the (new) day can no longer serve.
-        setOption((o) => (o && !optionStartExists(next, bookingOption(o)) ? null : o));
+        setOption((o) => (o && !optionStartExists(next, bookingOption(pricing, o)) ? null : o));
       })
-      .catch(() => !cancelled && setSlots([]))
+      .catch(() => {
+        if (cancelled) return;
+        setSlots([]);
+        setOpensAt(null);
+      })
       .finally(() => !cancelled && setLoadingSlots(false));
     return () => {
       cancelled = true;
     };
-  }, [date, refreshKey]);
+  }, [date, refreshKey, pricing]);
 
   // Read the ?code= link (from the offer email) and ?option= (from the pricing
   // page CTAs — someone who tapped "Book the 10-hour pack" has already chosen,
@@ -210,7 +227,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
     }
   }, [availableOptions]);
 
-  const selectedOption = option ? bookingOption(option) : null;
+  const selectedOption = option ? bookingOption(pricing, option) : null;
   const usesBanked = !!selectedOption?.usesBankedHours;
 
   // Live-validate the code (debounced). Purely UX — the server re-checks on
@@ -254,7 +271,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
     };
   }, [discountCode, option, usesBanked]);
 
-  const tier = FLAT_TIER;
+  const roomLabel = pricing.room.label;
   const duration = selectedOption?.durationHours ?? 0;
   const startSlot = startIdx !== null ? (slots[startIdx] ?? null) : null;
   const endSlot =
@@ -262,7 +279,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
 
   const price = option
     ? calcBookingPriceCents({
-        tier,
+        settings: pricing,
         optionId: option,
         start: startSlot?.start ?? null,
         groupSize,
@@ -296,7 +313,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   // Only flagged for the generic 2h option — picking a qualifying weekday
   // start still gets the cheaper rate. The daytime option says it already.
   const dealApplied =
-    option === "2h" && !!startSlot && isWeekdayDaytime(startSlot.start, 2);
+    option === "2h" && !!startSlot && weekdayDealApplies(pricing, startSlot.start, 2);
 
   // A signed-in account has already been ID-verified (that's what unlocks it),
   // so anyone else is booking for the first time as far as this flow knows.
@@ -310,11 +327,16 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
 
   const optionDisabledReason = (id: BookingOptionId): string | null => {
     if (loadingSlots) return "Checking availability…";
-    const opt = bookingOption(id);
+    const opt = bookingOption(pricing, id);
     if (optionStartExists(slots, opt)) return null;
     if (opt.weekdayDaytimeOnly && !slots.some((s) => s.deal_2h)) return "Mon–Fri only";
     return "No times left this day";
   };
+
+  // Today reads differently everywhere: the API has already dropped every start
+  // inside the minimum-notice window, so "nothing left" here doesn't mean the
+  // room was booked out — it usually means the day has simply run past it.
+  const dateIsToday = date === min;
 
   // Every option unavailable = the day is the problem, not the choice.
   const dayIsFull =
@@ -401,7 +423,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
         body: JSON.stringify({
           startTime: startSlot.start,
           durationHours: duration,
-          tierSlug: tier.slug,
+          tierSlug: TIER_SLUG,
           optionId: option,
           groupSize,
           name: v.name,
@@ -447,19 +469,29 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
   const timeHint = usesBanked
     ? `This session uses ${duration} of your ${bankedHours} banked hours${bankedRemainingAfter != null ? ` — ${bankedRemainingAfter} left after` : ""}. Pick a start time.`
     : selectedOption?.isPack
-      ? `You're booking the 10-hour pack (${formatNZD(BULK_PACK.totalCents)}+GST). Choose your first 2-hour session now — the rest banks to your account.`
+      ? `You're booking the ${pricing.pack.packHours}-hour pack (${formatNZD(pricing.pack.totalCents)}+GST). Choose your first ${pricing.pack.firstSessionHours}-hour session now — the rest banks to your account.`
       : selectedOption?.weekdayDaytimeOnly
-        ? "Weekday-daytime starts only — your session runs inside 10am–4pm."
+        ? `Weekday-daytime starts only — your session runs inside ${formatHour(pricing.weekdayDeal.windowStartHour)}–${formatHour(pricing.weekdayDeal.windowEndHour)}.`
         : duration === 2
           ? "Pick a start time. Your session runs 2 hours from there."
           : "Pick a start time.";
+
+  // Same rule, said out loud on the day it bites — and only in the version
+  // that's true. On a day someone's already booked, the 4 hours don't apply
+  // from their start onwards, so saying they do would be a lie the grid
+  // visibly contradicts.
+  const timeHintWithNotice = !dateIsToday
+    ? timeHint
+    : opensAt
+      ? `${timeHint} The room's already open today from ${formatNZ(opensAt, "h:mmaaa")}, so later starts are yours at short notice.`
+      : `${timeHint} ${MIN_NOTICE_NOTE}`;
 
   // Group-step price line.
   const groupCardPrice = usesBanked
     ? price && price.surchargeCents > 0
       ? formatNZDPlusGst(price.surchargeCents)
       : "Banked hours"
-    : (totalLabel ?? formatNZDPlusGst(FLAT_TIER.peak_1h_price_cents));
+    : (totalLabel ?? formatNZDPlusGst(pricing.rates.oneHourCents));
   const groupCardSub = usesBanked
     ? `${duration}h · banked`
     : selectedOption?.isPack
@@ -519,7 +551,14 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
             }}
           >
           {step === STEP.DATE && (
-            <StepShell title="Pick a day" hint={`We open 90 days out. ${WEEKDAY_DAYTIME_DEAL.label}: 2 hours for ${formatNZDPlusGst(WEEKDAY_DAYTIME_DEAL.twoHourPriceCents)}.`}>
+            <StepShell
+              title="Pick a day"
+              hint={`We open 90 days out. A session on a quiet day needs ${MIN_NOTICE_HOURS} hours' notice — less on a day the room's already open.${
+                pricing.weekdayDeal.enabled
+                  ? ` ${pricing.weekdayDeal.label}: 2 hours for ${formatNZDPlusGst(pricing.weekdayDeal.twoHourPriceCents)}.`
+                  : ""
+              }`}
+            >
               <Calendar value={date} min={min} max={max} onChange={(d) => setDate(d)} />
             </StepShell>
           )}
@@ -536,12 +575,23 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
               {dayIsFull ? (
                 <div className="card p-7">
                   <h3 className="font-display text-h3 font-semibold text-text">
-                    {dateLabel} is fully booked.
+                    {dateIsToday ? "Nothing left today." : `${dateLabel} is fully booked.`}
                   </h3>
                   <p className="lead mt-3 text-sm text-pretty">
-                    Nothing left on that day — either the room is taken or the
-                    decks are out on a job. Pick another day and you&apos;re
-                    away.
+                    {dateIsToday && !opensAt ? (
+                      <>
+                        We need {MIN_NOTICE_HOURS} hours&apos; notice to have the
+                        room set up for you, so today&apos;s starts have gone —
+                        unless the room was taken or the decks are out on a job
+                        anyway. Pick another day and you&apos;re away.
+                      </>
+                    ) : (
+                      <>
+                        Nothing left on that day — either the room is taken or
+                        the decks are out on a job. Pick another day and
+                        you&apos;re away.
+                      </>
+                    )}
                   </p>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <button
@@ -572,7 +622,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
           )}
 
           {step === STEP.TIME && (
-            <StepShell title="Pick your time" hint={timeHint}>
+            <StepShell title="Pick your time" hint={timeHintWithNotice}>
               <SlotPicker
                 slots={slots}
                 loading={loadingSlots}
@@ -587,12 +637,16 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
           {step === STEP.DETAILS && (
             <StepShell
               title="Your details"
-              hint={`Up to ${FLAT_LIMITS.maxGroupSize} people. Groups of ${GROUP_SURCHARGE.threshold + 1}+ add ${formatNZD(GROUP_SURCHARGE.oneHourCents)}+GST (1 hour) or ${formatNZD(GROUP_SURCHARGE.twoHourCents)}+GST (2 hours), added automatically.`}
+              hint={`Up to ${pricing.room.maxGroupSize} people.${
+                pricing.groupSurcharge.threshold < pricing.room.maxGroupSize
+                  ? ` Groups of ${pricing.groupSurcharge.threshold + 1}+ add ${formatNZD(pricing.groupSurcharge.oneHourCents)}+GST (1 hour) or ${formatNZD(pricing.groupSurcharge.twoHourCents)}+GST (2 hours), added automatically.`
+                  : ""
+              }`}
             >
               <div className="card p-7">
                 <div className="flex items-baseline justify-between">
                   <h3 className="font-display text-h3 font-semibold text-text">
-                    {selectedOption?.label ?? tier.label}
+                    {selectedOption?.label ?? roomLabel}
                   </h3>
                   <span className="font-mono text-meta uppercase tracking-meta text-text-dim">
                     Whole room
@@ -604,7 +658,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                 </p>
                 {dealApplied ? (
                   <p className="mt-2 font-mono text-meta uppercase tracking-meta text-accent">
-                    {WEEKDAY_DAYTIME_DEAL.label} rate applied
+                    {pricing.weekdayDeal.label} rate applied
                   </p>
                 ) : null}
                 {surchargeLabel ? (
@@ -615,7 +669,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                 <GroupSize
                   value={groupSize}
                   min={1}
-                  max={FLAT_LIMITS.maxGroupSize}
+                  max={pricing.room.maxGroupSize}
                   onChange={setGroupSize}
                 />
               </div>
@@ -643,10 +697,10 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                   {
                     label: "Duration",
                     value: selectedOption?.isPack
-                      ? `${duration}h now · ${BULK_PACK.packHours - duration}h banked`
+                      ? `${duration}h now · ${pricing.pack.packHours - duration}h banked`
                       : `${duration}h`,
                   },
-                  { label: "Room", value: `${tier.label} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
+                  { label: "Room", value: `${roomLabel} · ${groupSize} ${groupSize === 1 ? "person" : "people"}` },
                   ...(usesBanked
                     ? [
                         {
@@ -680,7 +734,7 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
                 />
               )}
               {selectedOption?.isPack ? (
-                <p className="mt-6 text-sm text-text-muted">{PACK_SUMMARY_NOTE}</p>
+                <p className="mt-6 text-sm text-text-muted">{packSummaryNote}</p>
               ) : null}
 
               <div className="mt-8 border-t border-border pt-8">
@@ -744,13 +798,13 @@ export function BookingFlow({ account }: { account?: BookingAccount | null }) {
           optionLabel={selectedOption?.label ?? null}
           timeLabel={timeLabel}
           durationHours={duration}
-          tierLabel={option ? tier.label : null}
+          tierLabel={option ? roomLabel : null}
           groupSize={groupSize}
           surchargeLabel={surchargeLabel}
           discountLabel={discountLabel}
           totalLabel={totalWithGstLabel}
-          dealNote={dealApplied ? WEEKDAY_DAYTIME_DEAL.label : null}
-          packNote={selectedOption?.isPack ? PACK_SUMMARY_NOTE : usesBanked ? "Paid with your banked hours." : null}
+          dealNote={dealApplied ? pricing.weekdayDeal.label : null}
+          packNote={selectedOption?.isPack ? packSummaryNote : usesBanked ? "Paid with your banked hours." : null}
         />
       </aside>
     </div>

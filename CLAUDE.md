@@ -93,20 +93,73 @@ facts (prices, times, refs), serif for statements. Real copy, never lorem.
 
 ## Business rules (don't guess these)
 
-**Pricing** — one tier, groups up to 8. $50+GST/1h, $80+GST/2h. Prices are stored
-in **cents, exclusive of GST**; UI appends "+GST". A weekday-daytime deal makes a
-2-hour session that sits entirely inside Mon–Fri 10:00–16:00 NZ $60+GST — computed
-**in code** (`WEEKDAY_DAYTIME_DEAL` in `lib/pricing.ts`), deliberately not stored
-in `pricing_tiers`. Groups of 5–8 add a flat surcharge. Longer sessions go through
-email, not online booking.
+**Pricing is edited, not deployed.** The whole price list is one JSON row —
+`studio_settings.key = 'pricing'` (migration `0015`) — edited at
+**`/admin/pricing`** and shaped by `pricingSettingsSchema` in
+`lib/pricing-settings.ts`. Flat **$50+GST an hour**: $50/1h, $100/2h, with a
+weekday-daytime 2-hour deal ($60+GST, Mon–Fri, session inside 10:00–16:00 NZ), a
+prepaid 10-hour pack ($250+GST), and a flat surcharge for groups over 4. Every
+one of those is a knob, including on/off switches for the deal, the pack and each
+option card. Prices are in **cents, exclusive of GST**; UI appends "+GST".
 
-> The live booking API reads the tier from the `pricing_tiers` **table**, so a
-> price change in `lib/pricing.ts` must ship with a matching migration.
+Things to know before touching it:
+
+- **`lib/pricing.ts` computes, it doesn't decide.** Every function takes the
+  live `PricingSettings`. The constants that used to live there are now
+  `DEFAULT_PRICING_SETTINGS` — a **fallback**, not the truth. If the row can't
+  be read (no table, no Supabase, network), the site prices from the defaults
+  and keeps taking bookings; it never fails a sale over a settings read.
+- **`pricing_tiers` is a mirror now.** `writePricingSettings()` rewrites its
+  label/capacity/rates on every save, because the crew app's Studio tab reads
+  that table. Nothing computes a price from it any more — a price change needs
+  no migration, and the two can't drift.
+- **Two readers, on purpose.** `getPricingSettings()` is live (React-cached per
+  request) and is what the booking API, quick-book and admin use. The marketing
+  pages use `getPublicPricingSettings()`, an `unstable_cache` entry tagged
+  `studio-pricing`, so `/` and `/studio/pricing` stay static on the CDN. A save
+  calls `updateTag` **and** `revalidatePath` on both — miss the second and the
+  landing page keeps serving last week's rate out of prerendered HTML.
+- Client components never import prices; the server component that renders them
+  passes `pricing` down (see `BookingFlow`).
+- Copy that still hard-codes a number: `lib/legal.ts` (terms + house rules),
+  `emails/BookingPostSession.tsx`, and the prose lines on `/about` and
+  `/studio/the-room`. They're accurate today; a rate change means editing them.
+- Longer than 2 hours is still an email enquiry — `ONLINE_MAX_DURATION_HOURS`
+  is structural (slot grid, option ids), not a price knob, so it isn't editable.
 
 **Booking states** — `status`: `pending_verification | confirmed | completed |
 cancelled | no_show`. `payment_status`: `unpaid | paid | refunded | comped`.
 A first-time customer's booking lands as pending until an admin marks their ID
 verified; after that their bookings confirm instantly.
+
+**Minimum notice — 4 hours on a cold day, 30 minutes once the room is open**
+(`lib/booking-window.ts`, customers only). Booking closes `MIN_NOTICE_HOURS`
+before a session on a day with nothing else on it: the room has to be turned
+around and the gear checked, and a 12:30 booking for 1pm doesn't get that. But
+the thing being protected is *opening the room*, and it's paid once — so if the
+day already has a session, every start from that session onwards drops to
+`WARM_DAY_NOTICE_MINUTES`. A 2pm booking means someone can take 5pm at half four.
+Two knobs, one rule; don't treat the second as an exception to bolt conditions
+onto.
+
+- `dayOpensAt()` anchors on the **earliest `confirmed`/`completed` session** of
+  that NZ day (`ROOM_OPENING_STATUSES`). Not `pending_verification` — that
+  booking holds its slot but may never confirm, and a booking that evaporates
+  never set the room up. `completed` counts because the post-session cron flips
+  this morning's session to it within hours.
+- The waiver can only ever fire *inside* the 4-hour window (outside it
+  everything is bookable anyway), so in practice it means "the room is open or
+  opens within a few hours". The generous edge: a 10am–11am session leaves the
+  whole evening on 30 minutes' notice.
+- Enforced twice. `/api/bookings/availability` greys the slots out and returns
+  `opensAt` so the picker can say *why* late starts are open instead of
+  contradicting the 4-hour line. `POST /api/bookings` re-checks against its own
+  clock — it only queries the day's sessions when the start is inside the
+  window at all — and answers **409**, not 422, so the flow bounces back to the
+  time picker with a fresh list rather than stranding someone on review.
+- **Admin quick-book deliberately checks none of it** — saying yes to a walk-in
+  in twenty minutes is Will choosing to be ready, which is the whole point.
+- It's a floor on lead time, not on the calendar: this morning for tonight is fine.
 
 **ID verification** (migration `0013`, `lib/id-verification.ts`) — booking while
 unverified auto-emails a one-off upload link (`/verify-id/[token]`); the customer
@@ -156,6 +209,19 @@ and the crew app's Studio tab) and `setPaymentStatus` in `app/admin/actions.ts`
 (so the admin sees a result instead of trusting a webhook configured in the
 Supabase dashboard and invisible from this repo). Running twice is safe.
 
+**…but only while there is still a session to get into.** `runPaidAutomations()`
+first reads `end_time`/`status` and skips the whole chain — code *and* access
+email — for a finished or cancelled booking, returning `skipped`. This is the
+crew door-code trigger's rule applied to the email as well: squaring up last
+month's unpaid session is bookkeeping, and it used to send that customer
+directions, a "your code arrives separately" line that was never true, and a
+what-to-bring list for a night they had already played. The admin UI mirrors it
+(no confirm step, "Mark paid" not "Mark paid & send"), `lib/automation.ts` marks
+the access row `na` rather than amber, and `lib/booking-progress.ts` marks it
+`skipped` rather than promising the customer an email. A send that was genuinely
+*attempted* and failed still reports as a failure — `access_last_attempt_at` is
+what tells those apart.
+
 **Two readings of the same columns — don't merge them.** `lib/automation.ts` is
 the *admin's* view: it exists to say "TTLock refused 3 times", "no record", "the
 paid webhook isn't wired up". `lib/booking-progress.ts` is the *customer's* view
@@ -183,12 +249,13 @@ passcodes never call back).
 
 ```
 app/(site)/      marketing + booking + customer account
-app/admin/       dashboard (bookings, calendar, customers, blackouts, discounts, quick-book)
+app/admin/       dashboard (bookings, calendar, customers, pricing, blackouts, discounts, quick-book)
 app/api/         bookings, availability, discounts, contact, cron/*, hooks/*, webhooks/xero
 components/      admin/, booking/, studio/, hire/, three/, layout/, ui/, contact/, account/
-lib/             pricing, banked-hours, rewards, discounts, timezone, ics, email, seo, xero, supabase/
+lib/             pricing (+ pricing-settings/pricing-store), banked-hours, rewards,
+                 discounts, timezone, ics, email, seo, xero, supabase/
 emails/          React Email templates
-supabase/migrations/  0001–0014 (0009 and 0014 are DO-NOT-RUN mirrors of crew 0057/0124)
+supabase/migrations/  0001–0015 (0009, 0010 and 0014 are DO-NOT-RUN mirrors of crew 0057/0058/0124)
 design-system/   MASTER.md (locked)
 ```
 

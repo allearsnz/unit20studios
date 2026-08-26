@@ -1,18 +1,32 @@
 "use server";
 
 import { createElement } from "react";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
-import { assertAdmin } from "@/lib/admin-auth";
+import { assertAdmin, requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { sendEmail, icsAttachment } from "@/lib/email";
 import { buildBookingIcs } from "@/lib/ics";
 import { formatBookingWhen, nzWallToUtc } from "@/lib/timezone";
 import { calcPriceCents, formatNZDPlusGstIncl, groupSurchargeCents } from "@/lib/pricing";
+import {
+  PRICING_CACHE_TAG,
+  getPricingSettings,
+  writePricingSettings,
+} from "@/lib/pricing-store";
+import {
+  DEFAULT_PRICING_SETTINGS,
+  pricingSettingsProblem,
+  pricingSettingsSchema,
+} from "@/lib/pricing-settings";
 import { normalizeNZPhone } from "@/lib/validation";
 import { invoiceBooking } from "@/lib/xero-booking";
-import { issuePendingDoorCodes, runPaidAutomations } from "@/lib/booking-paid";
+import {
+  issuePendingDoorCodes,
+  runPaidAutomations,
+  type PaidSkipReason,
+} from "@/lib/booking-paid";
 import { sendAccessInstructions, type AccessSendResult } from "@/lib/notifications";
 import {
   type RequestResult,
@@ -136,6 +150,12 @@ export async function setBookingStatus(id: string, status: BookingStatus) {
 export type PaymentUpdateResult = {
   /** True when this call is what flipped the booking to paid. */
   triggered: boolean;
+  /**
+   * Set when the payment deliberately sent nothing — a session that has already
+   * finished, or a cancelled booking. Marking those paid is bookkeeping; the
+   * other three fields are then absent because nothing was attempted.
+   */
+  skipped?: PaidSkipReason;
   access?: AccessSendResult["status"];
   accessError?: string;
   doorCodeQueued?: boolean;
@@ -174,10 +194,12 @@ export async function setPaymentStatus(
     // and running both is safe (the send is claimed atomically).
     const result = await runPaidAutomations(id);
     revalidatePath(`/admin/bookings/${id}`);
+    if (result.skipped) return { triggered: true, skipped: result.skipped };
     return {
       triggered: true,
-      access: result.access.status,
-      accessError: "error" in result.access ? result.access.error : undefined,
+      access: result.access?.status,
+      accessError:
+        result.access && "error" in result.access ? result.access.error : undefined,
       doorCodeQueued: result.doorCodeKicked,
     };
   }
@@ -475,9 +497,13 @@ export async function quickBook(formData: FormData) {
   const { data: tierRow } = await supabase.from("pricing_tiers").select("*").eq("slug", tierSlug).maybeSingle();
   if (!tierRow) return;
   const tier = tierRow as PricingTier;
-  // Start time applies the weekday-daytime 2h deal ($60+GST) when it fits;
-  // groups of 5+ add the flat surcharge ($20+GST 1h / $30+GST 2h+).
-  const total = calcPriceCents(tier, durationHours, start) + groupSurchargeCents(durationHours, groupSize);
+  // Prices come from the live settings (/admin/pricing), not the tier row: the
+  // start time applies the weekday-daytime 2h deal when it fits, and a group
+  // over the threshold adds the flat surcharge.
+  const pricing = await getPricingSettings();
+  const total =
+    calcPriceCents(pricing, durationHours, start) +
+    groupSurchargeCents(pricing, durationHours, groupSize);
 
   const email = rawEmail || `walkin-${Date.now()}@unit20.local`;
   const phone = rawPhone ? (normalizeNZPhone(rawPhone) ?? rawPhone) : "—";
@@ -701,4 +727,151 @@ export async function signOutAdmin() {
   const supabase = await createSupabaseServerClient();
   await supabase.auth.signOut();
   redirect("/admin/login");
+}
+
+/* -------------------------------------------------------------------------
+ * Pricing
+ *
+ * The price list is one JSON row (`studio_settings.pricing`); this is the only
+ * thing that writes it. Two rules worth keeping:
+ *   - Money is typed in DOLLARS ex-GST and stored in CENTS. The conversion
+ *     happens here, once, so no other layer has to think about it.
+ *   - A save invalidates both the tagged data cache (the marketing pages read
+ *     prices through it) and the prerendered pages themselves. Miss the second
+ *     and the landing page keeps serving last week's rate from static HTML.
+ * ---------------------------------------------------------------------- */
+
+/** Dollars from a form field → cents, ex-GST. Blank/nonsense → `fallback`. */
+function dollarsToCents(form: FormData, name: string, fallback: number): number {
+  const raw = String(form.get(name) ?? "").trim().replace(/[$,\s]/g, "");
+  if (!raw) return fallback;
+  const dollars = Number(raw);
+  if (!Number.isFinite(dollars) || dollars < 0) return fallback;
+  return Math.round(dollars * 100);
+}
+
+function intField(form: FormData, name: string, fallback: number): number {
+  const raw = String(form.get(name) ?? "").trim();
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.round(n) : fallback;
+}
+
+function textField(form: FormData, name: string, fallback: string): string {
+  const raw = String(form.get(name) ?? "").trim();
+  return raw || fallback;
+}
+
+function checkbox(form: FormData, name: string): boolean {
+  return form.get(name) != null;
+}
+
+/** Everything a price change has to touch: the data cache and the static HTML. */
+async function revalidatePricing() {
+  // updateTag (not revalidateTag): this runs inside a server action, so the
+  // admin — and the page they're about to look at — must read their own write,
+  // not a stale-while-revalidate copy of last week's rate.
+  updateTag(PRICING_CACHE_TAG);
+  for (const path of ["/", "/studio/pricing", "/studio/book", "/admin/pricing"]) {
+    revalidatePath(path);
+  }
+}
+
+export async function savePricing(formData: FormData) {
+  const admin = await requireAdmin();
+
+  const draft = {
+    room: {
+      label: textField(formData, "room_label", DEFAULT_PRICING_SETTINGS.room.label),
+      maxGroupSize: intField(formData, "room_max_group", DEFAULT_PRICING_SETTINGS.room.maxGroupSize),
+    },
+    rates: {
+      oneHourCents: dollarsToCents(formData, "rate_1h", DEFAULT_PRICING_SETTINGS.rates.oneHourCents),
+      twoHourCents: dollarsToCents(formData, "rate_2h", DEFAULT_PRICING_SETTINGS.rates.twoHourCents),
+    },
+    weekdayDeal: {
+      enabled: checkbox(formData, "deal_enabled"),
+      windowStartHour: intField(formData, "deal_start", 10),
+      windowEndHour: intField(formData, "deal_end", 16),
+      twoHourPriceCents: dollarsToCents(
+        formData,
+        "deal_price",
+        DEFAULT_PRICING_SETTINGS.weekdayDeal.twoHourPriceCents,
+      ),
+      label: textField(formData, "deal_label", DEFAULT_PRICING_SETTINGS.weekdayDeal.label),
+      shortNote: String(formData.get("deal_short_note") ?? "").trim(),
+    },
+    pack: {
+      enabled: checkbox(formData, "pack_enabled"),
+      packHours: intField(formData, "pack_hours", DEFAULT_PRICING_SETTINGS.pack.packHours),
+      firstSessionHours: intField(
+        formData,
+        "pack_first_hours",
+        DEFAULT_PRICING_SETTINGS.pack.firstSessionHours,
+      ),
+      totalCents: dollarsToCents(formData, "pack_total", DEFAULT_PRICING_SETTINGS.pack.totalCents),
+    },
+    groupSurcharge: {
+      threshold: intField(
+        formData,
+        "surcharge_threshold",
+        DEFAULT_PRICING_SETTINGS.groupSurcharge.threshold,
+      ),
+      oneHourCents: dollarsToCents(
+        formData,
+        "surcharge_1h",
+        DEFAULT_PRICING_SETTINGS.groupSurcharge.oneHourCents,
+      ),
+      twoHourCents: dollarsToCents(
+        formData,
+        "surcharge_2h",
+        DEFAULT_PRICING_SETTINGS.groupSurcharge.twoHourCents,
+      ),
+    },
+    options: Object.fromEntries(
+      (["1h", "2h", "2h-daytime", "pack10"] as const).map((id) => [
+        id,
+        {
+          enabled: checkbox(formData, `opt_${id}_enabled`),
+          label: textField(
+            formData,
+            `opt_${id}_label`,
+            DEFAULT_PRICING_SETTINGS.options[id].label,
+          ),
+          note: String(formData.get(`opt_${id}_note`) ?? "").trim(),
+        },
+      ]),
+    ),
+  };
+
+  const parsed = pricingSettingsSchema.safeParse(draft);
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return pricingError(`${issue.path.join(".")}: ${issue.message}`);
+  }
+  const problem = pricingSettingsProblem(parsed.data);
+  if (problem) return pricingError(problem);
+
+  const result = await writePricingSettings(parsed.data, admin.email);
+  if (!result.ok) return pricingError(result.error ?? "Could not save.");
+
+  await revalidatePricing();
+  redirect(
+    result.mirrorError
+      ? `/admin/pricing?saved=1&warn=${encodeURIComponent(`Saved, but the pricing_tiers mirror didn't update: ${result.mirrorError}`)}`
+      : "/admin/pricing?saved=1",
+  );
+}
+
+/** Put every knob back to the code defaults (flat $50+GST an hour). */
+export async function resetPricing() {
+  const admin = await requireAdmin();
+  const result = await writePricingSettings(DEFAULT_PRICING_SETTINGS, admin.email);
+  if (!result.ok) return pricingError(result.error ?? "Could not reset.");
+  await revalidatePricing();
+  redirect("/admin/pricing?saved=1");
+}
+
+function pricingError(message: string): never {
+  redirect(`/admin/pricing?error=${encodeURIComponent(message)}`);
 }

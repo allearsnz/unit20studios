@@ -6,14 +6,21 @@ import { resolveLinkedCustomer } from "@/lib/customer-auth";
 import { bankedHoursBalance, creditBankedHours } from "@/lib/banked-hours";
 import { bookingInputSchema, normalizeNZPhone } from "@/lib/validation";
 import {
-  BULK_PACK,
-  FLAT_LIMITS,
+  ROOM_OPENING_STATUSES,
+  type DaySession,
+  dayOpensAt,
+  isBookableStart,
+  noticeRefusal,
+} from "@/lib/booking-window";
+import { formatNZ, nzDateHourToUtc } from "@/lib/timezone";
+import {
   bookingOption,
-  WEEKDAY_DAYTIME_DEAL,
   calcBookingPriceCents,
   formatNZDPlusGst,
-  isWeekdayDaytime,
+  isOptionOffered,
+  weekdayDealApplies,
 } from "@/lib/pricing";
+import { getPricingSettings } from "@/lib/pricing-store";
 import { sendBookingCreatedEmails } from "@/lib/notifications";
 import { requestIdVerification } from "@/lib/id-verification";
 import { discountAmountCents, validateDiscountCode } from "@/lib/discounts";
@@ -39,24 +46,41 @@ export async function POST(req: NextRequest) {
 
   const start = new Date(input.startTime);
   const end = new Date(start.getTime() + input.durationHours * 3600 * 1000);
+  // Past times are checked here; the notice rule needs the day's other
+  // sessions, so it waits until we have a Supabase client (below).
+  // 409, not 422: the payload is fine, the *time* is no longer bookable, and
+  // 409 is what sends the flow back to the time picker with a fresh slot list
+  // instead of stranding them on the review step.
   if (start.getTime() <= Date.now()) {
-    return NextResponse.json({ error: "That time has already passed — pick another." }, { status: 422 });
+    return NextResponse.json({ error: "That time has already passed — pick another." }, { status: 409 });
   }
+
+  // The live price list (admin-editable; falls back to code defaults if the
+  // settings row can't be read — a pricing outage must never stop a booking).
+  const pricing = await getPricingSettings();
 
   // Resolve the booking option (legacy clients send only durationHours).
   const optionId = input.optionId ?? (input.durationHours === 1 ? "1h" : "2h");
-  const option = bookingOption(optionId);
+  const option = bookingOption(pricing, optionId);
   if (input.durationHours !== option.durationHours) {
     return NextResponse.json(
       { error: "That duration doesn't match the selected option." },
       { status: 422 },
     );
   }
-  if (option.weekdayDaytimeOnly && !isWeekdayDaytime(start, option.durationHours)) {
+  // An option switched off in the admin panel while this flow was open. 409
+  // rather than 422 for the same reason a taken slot is: the answer is to go
+  // back and pick again from a fresh list, not to fix the form.
+  if (!isOptionOffered(pricing, optionId)) {
+    return NextResponse.json(
+      { error: "That option isn't available any more — pick another." },
+      { status: 409 },
+    );
+  }
+  if (option.weekdayDaytimeOnly && !weekdayDealApplies(pricing, start, option.durationHours)) {
     return NextResponse.json(
       {
-        error:
-          "The weekday-daytime rate only covers Mon–Fri sessions inside 10am–4pm — pick a qualifying start time or the standard 2-hour option.",
+        error: `The ${pricing.weekdayDeal.label} rate only covers qualifying weekday sessions — pick a qualifying start time or the standard 2-hour option.`,
       },
       { status: 422 },
     );
@@ -67,6 +91,31 @@ export async function POST(req: NextRequest) {
     supabase = createAdminClient();
   } catch {
     return NextResponse.json({ error: "Bookings are temporarily unavailable." }, { status: 503 });
+  }
+
+  // Minimum notice, re-checked against the server clock — the slot list this
+  // came from may be an hour stale. Cheap because it only runs when the start
+  // is inside the window at all: everything ≥ MIN_NOTICE_HOURS out skips the
+  // query entirely. The day's other sessions decide whether the room is
+  // already being opened, which is what lets a late start through.
+  if (!isBookableStart(start, null)) {
+    const nzDay = formatNZ(start, "yyyy-MM-dd");
+    // Both ends from civil dates, so a DST day (23 or 25 hours long) still
+    // bounds exactly one NZ day.
+    const [dy, dm, dd] = nzDay.split("-").map(Number);
+    const nextDay = new Date(Date.UTC(dy, dm - 1, dd + 1)).toISOString().slice(0, 10);
+    const dayStartIso = nzDateHourToUtc(nzDay, 0).toISOString();
+    const dayEndIso = nzDateHourToUtc(nextDay, 0).toISOString();
+    const { data: sameDay } = await supabase
+      .from("bookings")
+      .select("start_time,status")
+      .in("status", [...ROOM_OPENING_STATUSES])
+      .gte("start_time", dayStartIso)
+      .lt("start_time", dayEndIso);
+    const refusal = noticeRefusal(start, dayOpensAt((sameDay as DaySession[]) ?? []));
+    if (refusal) {
+      return NextResponse.json({ error: refusal }, { status: 409 });
+    }
   }
 
   // Who's booking? (Signed-in accounts get banked hours + booking linkage.)
@@ -91,10 +140,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unknown pricing tier." }, { status: 422 });
   }
   const tier = tierRow as PricingTier;
-  // Cap comes from code (FLAT_LIMITS), not the DB row, so it can't drift.
-  if (input.groupSize < 1 || input.groupSize > FLAT_LIMITS.maxGroupSize) {
+  // Cap comes from the live settings, not the tier row — the row is a mirror
+  // written on save, and the settings are what the booking flow was rendered
+  // from.
+  if (input.groupSize < 1 || input.groupSize > pricing.room.maxGroupSize) {
     return NextResponse.json(
-      { error: `Group size must be between 1 and ${FLAT_LIMITS.maxGroupSize}.` },
+      { error: `Group size must be between 1 and ${pricing.room.maxGroupSize}.` },
       { status: 422 },
     );
   }
@@ -103,7 +154,7 @@ export async function POST(req: NextRequest) {
   // surcharge for groups of 5+. For banked bookings the subtotal is just the
   // surcharge (payable in person); everything else is covered by prepaid hours.
   const { baseCents, surchargeCents, totalCents: subtotal } = calcBookingPriceCents({
-    tier,
+    settings: pricing,
     optionId,
     start,
     groupSize: input.groupSize,
@@ -339,9 +390,9 @@ export async function POST(req: NextRequest) {
   // ---- 10-hour pack: bank the hours + draw down this first session ----
   if (option.isPack) {
     const noteLines = [
-      `10-HOUR PACK (${formatNZDPlusGst(BULK_PACK.totalCents)} prepaid block). ` +
+      `${pricing.pack.packHours}-HOUR PACK (${formatNZDPlusGst(pricing.pack.totalCents)} prepaid block). ` +
         `This booking is the first ${option.durationHours}h — ` +
-        `${BULK_PACK.packHours - option.durationHours}h remain banked to the account.`,
+        `${pricing.pack.packHours - option.durationHours}h remain banked to the account.`,
     ];
     if (surchargeCents > 0) {
       noteLines.push(
@@ -359,10 +410,10 @@ export async function POST(req: NextRequest) {
     // Bank all 10 hours, then draw down the 2h scheduled now → 8h remain.
     await creditBankedHours(supabase, {
       customerId: customer.id,
-      hours: BULK_PACK.packHours,
+      hours: pricing.pack.packHours,
       reason: "pack_purchase",
       bookingId: booking.id,
-      note: `10-hour pack ${booking.friendly_id}`,
+      note: `${pricing.pack.packHours}-hour pack ${booking.friendly_id}`,
     });
     await supabase.rpc("debit_banked_hours", {
       p_customer_id: customer.id,
@@ -381,9 +432,10 @@ export async function POST(req: NextRequest) {
   const rateNote = option.usesBankedHours
     ? `Banked hours — ${option.durationHours}h from your prepaid balance`
     : option.isPack
-      ? `10-hour pack — first ${option.durationHours}h booked`
-      : optionId === "2h-daytime" || (optionId === "2h" && baseCents !== tier.peak_2h_price_cents)
-        ? WEEKDAY_DAYTIME_DEAL.label
+      ? `${pricing.pack.packHours}-hour pack — first ${option.durationHours}h booked`
+      : optionId === "2h-daytime" ||
+          (optionId === "2h" && baseCents !== pricing.rates.twoHourCents)
+        ? pricing.weekdayDeal.label
         : null;
 
   // Emails must never block booking creation.
