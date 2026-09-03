@@ -37,8 +37,10 @@ type ConfirmBooking = {
   access_sent_at: string | null;
   banked_hours_used: number;
   pricing_tier: { label: string } | { label: string }[] | null;
-  customer: { id_verified: boolean } | { id_verified: boolean }[] | null;
+  customer: CustomerJoin | CustomerJoin[] | null;
 };
+
+type CustomerJoin = { id: string; id_verified: boolean };
 
 export default async function ConfirmationPage({
   searchParams,
@@ -63,6 +65,18 @@ export default async function ConfirmationPage({
   const customer = Array.isArray(booking?.customer)
     ? booking?.customer[0]
     : booking?.customer;
+  const idVerified = customer?.id_verified ?? false;
+  /** First session, not cleared yet — the only reason this page nags. */
+  const needsId = !!booking && !idVerified && booking.status === "pending_verification";
+
+  // Deliberately a second, sequential read rather than an embed on the query
+  // above. It only runs for the one case that cares (a first-timer who hasn't
+  // been approved), it's the difference between "over to you" and "with us",
+  // and functions run in `hnd1` next to the database — an extra sequential
+  // await is ~2ms here. `loadBooking` is the query that must not grow risk:
+  // anything that makes it return null tells someone their booking doesn't
+  // exist.
+  const idSubmitted = needsId && customer ? await hasUploadedId(customer.id) : false;
 
   const progress = booking
     ? bookingProgress({
@@ -71,7 +85,8 @@ export default async function ConfirmationPage({
         start_time: booking.start_time,
         end_time: booking.end_time,
         access_sent_at: booking.access_sent_at,
-        idVerified: customer?.id_verified ?? false,
+        idVerified,
+        idSubmitted,
         banked: booking.banked_hours_used > 0,
       })
     : null;
@@ -90,14 +105,24 @@ export default async function ConfirmationPage({
         </span>
 
         <h1 className="display mt-8 text-text">
-          {confirmed ? "You're booked." : booking ? "Request received." : "Thanks."}
+          {confirmed
+            ? "You're booked."
+            : booking
+              ? needsId && !idSubmitted
+                ? "One thing left."
+                : "Request received."
+              : "Thanks."}
         </h1>
 
         <p className="lead mt-5 max-w-md text-pretty">
           {confirmed
             ? "Your session is locked in. We've emailed the details with a calendar invite — see you in the booth."
             : booking
-              ? "We've got your booking request. Since it's your first session, bring photo ID when you arrive and we'll confirm you on the spot. Check your email for the details."
+              ? needsId
+                ? idSubmitted
+                  ? "We've got your booking request and your ID. We'll check it over and email your confirmation shortly."
+                  : "We've got your booking request, and we're holding the slot. It's your first session, so we need to see photo ID before we can confirm it — we've emailed you a link to upload it."
+                : "We've got your booking request. Check your email for the details."
               : id
                 ? `We've recorded your booking (${id}). Check your email for the full details.`
                 : "We couldn't find that booking reference. Check your email for confirmation, or get in touch."}
@@ -159,8 +184,7 @@ export default async function ConfirmationPage({
           <p className="mt-6 max-w-md text-sm text-text-muted">
             On the day, come to {site.address.street} at your booking time —
             someone from Unit 20 will meet you there and let you in. Bring a USB
-            with your tracks, your own headphones, and photo ID if it&apos;s your
-            first visit.
+            with your tracks and your own headphones.
           </p>
         ) : null}
 
@@ -226,13 +250,30 @@ async function loadBooking(id: string | undefined): Promise<ConfirmBooking | nul
       .select(
         "friendly_id,start_time,end_time,duration_hours,total_price_cents,group_size," +
           "status,payment_status,access_sent_at,banked_hours_used," +
-          "pricing_tier:pricing_tiers(label),customer:customers(id_verified)",
+          "pricing_tier:pricing_tiers(label),customer:customers(id,id_verified)",
       )
       .eq("friendly_id", id)
       .maybeSingle();
     return (data as ConfirmBooking | null) ?? null;
   } catch {
     return null;
+  }
+}
+
+/** Have they sent their ID in yet? Only ever asked about an unverified
+ *  customer. Failure reads as "not yet", which is the safe way round: the page
+ *  nags someone who has already uploaded rather than going quiet on someone who
+ *  hasn't. */
+async function hasUploadedId(customerId: string): Promise<boolean> {
+  try {
+    const { data } = await createAdminClient()
+      .from("id_verifications")
+      .select("submitted_at")
+      .eq("customer_id", customerId)
+      .maybeSingle();
+    return !!(data as { submitted_at: string | null } | null)?.submitted_at;
+  } catch {
+    return false;
   }
 }
 

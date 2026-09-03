@@ -53,7 +53,13 @@ export default async function AccountPage() {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
 
-  const [{ data: bookingRows }, balance, completedHours, { data: rewardRows }] = await Promise.all([
+  const [
+    { data: bookingRows },
+    balance,
+    completedHours,
+    { data: rewardRows },
+    { data: idRow },
+  ] = await Promise.all([
     admin
       .from("bookings")
       .select("*, pricing_tier:pricing_tiers(label)")
@@ -69,8 +75,20 @@ export default async function AccountPage() {
       .eq("status", "active")
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
       .order("created_at", { ascending: false }),
+    // Only read for its `submitted_at`: an unverified customer who has already
+    // uploaded is waiting on us, not the other way round, and the tracker under
+    // each booking says so. Skipped once they're verified — it's permanent then
+    // and the row is emptied on approval anyway.
+    customer.id_verified
+      ? Promise.resolve({ data: null })
+      : admin
+          .from("id_verifications")
+          .select("submitted_at")
+          .eq("customer_id", customer.id)
+          .maybeSingle(),
   ]);
 
+  const idSubmitted = !!(idRow as { submitted_at: string | null } | null)?.submitted_at;
   const bookings = (bookingRows as AccountBooking[] | null) ?? [];
   const rewards = (rewardRows as DiscountCode[] | null) ?? [];
   const upcoming = bookings
@@ -115,6 +133,7 @@ export default async function AccountPage() {
           bookings={upcoming}
           empty="Nothing booked yet."
           idVerified={customer.id_verified}
+          idSubmitted={idSubmitted}
           now={now}
           defaultOpen
         />
@@ -123,6 +142,7 @@ export default async function AccountPage() {
           bookings={past}
           empty="No past sessions yet."
           idVerified={customer.id_verified}
+          idSubmitted={idSubmitted}
           now={now}
         />
       </div>

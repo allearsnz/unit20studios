@@ -15,7 +15,7 @@ const SITE_TERMS: { title: string; body: string }[] = [
   },
   {
     title: "Bookings are an agreement",
-    body: "Submitting a booking creates an agreement to these terms and the studio terms above. New customers' bookings are held pending a quick ID check; we confirm by email.",
+    body: "Submitting a booking creates an agreement to these terms and the studio terms above. A new customer's booking is held, not confirmed, until they've uploaded photo ID through the link we email; we confirm by email once it's approved.",
   },
   {
     title: "Intellectual property",

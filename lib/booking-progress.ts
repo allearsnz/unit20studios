@@ -57,6 +57,15 @@ export type ProgressInput = {
   access_sent_at?: string | null;
   /** Whether this customer's ID has been checked (permanent, once done). */
   idVerified: boolean;
+  /**
+   * Whether they've actually uploaded through the emailed link yet.
+   *
+   * The difference matters to the person reading this and to nobody else: an
+   * unverified customer who has uploaded is waiting on *us*, and telling them
+   * "over to you" would be a lie. Optional so callers without the
+   * `id_verifications` row still get the honest default — waiting on them.
+   */
+  idSubmitted?: boolean;
   /** Paid entirely from banked hours — there is nothing left to pay. */
   banked?: boolean;
 };
@@ -99,6 +108,13 @@ export function bookingProgress(b: ProgressInput, now: number = Date.now()): Boo
   // Only ever a step for a first-timer. Once checked it's permanent, so a
   // returning customer shouldn't see a box about it at all — showing a green
   // tick for something they did months ago is noise.
+  //
+  // THE ID MUST BE UPLOADED. There is no "bring it on the day" path any more:
+  // an unverified booking is `pending_verification` and nothing downstream
+  // (confirmation, payment, door code) happens until an admin approves an
+  // upload. Copy that offered the door as an alternative was writing a cheque
+  // the rest of the system doesn't cash — someone would turn up with a licence
+  // in their pocket to a session that had never been confirmed.
   if (b.idVerified) {
     steps.push({
       key: "id",
@@ -106,15 +122,26 @@ export function bookingProgress(b: ProgressInput, now: number = Date.now()): Boo
       state: "done",
       detail: "Done once, and it stays done — future sessions confirm straight away.",
     });
+  } else if (confirmed) {
+    // Confirmed without the flag: a walk-in keyed through admin Quick book.
+    steps.push({ key: "id", label: "ID check", state: "done", detail: "Cleared." });
+  } else if (b.idSubmitted) {
+    // Uploaded and sitting with us. Not `waitingOnYou` — chasing someone for
+    // something they've already sent is how you get a reply saying "I did".
+    steps.push({
+      key: "id",
+      label: "ID check",
+      state: "current",
+      detail: "Got your ID, thanks — we're checking it now and you'll get a confirmation email once it's cleared.",
+    });
   } else {
     steps.push({
       key: "id",
       label: "ID check",
-      state: confirmed ? "done" : "current",
-      detail: confirmed
-        ? "Cleared."
-        : "First session, so we need photo ID. We've emailed you a link to upload it — or just bring it on the day.",
-      waitingOnYou: !confirmed,
+      state: "current",
+      detail:
+        "Your session isn't confirmed until we've seen photo ID. Check your email for your upload link and send a photo of your driver licence or passport — it takes a minute, it's a one-off, and it has to be done before the day.",
+      waitingOnYou: true,
     });
   }
 

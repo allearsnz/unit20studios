@@ -30,10 +30,11 @@ export default function BookingReceivedNewCustomer({
     >
       <EmailHeading>We&apos;ve got your request.</EmailHeading>
       <EmailText>
-        Thanks, {firstName}. Since this is your first session, we just need to
-        check your ID before it&apos;s fully confirmed. There&apos;s a separate
-        email on its way with a link — upload a photo of your driver licence or
-        passport and we&apos;ll take it from there. It&apos;s a one-off.
+        Thanks, {firstName}. We&apos;re holding the slot, but since this is your
+        first session it isn&apos;t confirmed until we&apos;ve checked your ID.
+        There&apos;s a separate email on its way with a link — upload a photo of
+        your driver licence or passport and we&apos;ll take it from there.
+        It&apos;s a one-off, and after that your bookings confirm instantly.
       </EmailText>
 
       <DetailPanel
@@ -45,7 +46,7 @@ export default function BookingReceivedNewCustomer({
           ...(rateNote ? [{ label: "Rate", value: rateNote }] : []),
           ...(surchargeLabel ? [{ label: "Group surcharge", value: `${surchargeLabel} · included in total` }] : []),
           { label: "Total", value: `${total} (pay in person)`, accent: true },
-          { label: "Status", value: "Pending — needs ID" },
+          { label: "Status", value: "Held — waiting on your ID upload" },
         ]}
       />
 
@@ -53,8 +54,10 @@ export default function BookingReceivedNewCustomer({
 
       <InfoBlock label="What happens next">
         Send us your ID through the link in the other email and we&apos;ll do
-        the rest — you&apos;ll get a confirmation once you&apos;re verified. On
-        the day, bring a USB with your tracks and your own headphones.
+        the rest — you&apos;ll get a confirmation once you&apos;re verified. It
+        has to come through the link before the day; we can&apos;t check it at
+        the door. On the day, bring a USB with your tracks and your own
+        headphones.
       </InfoBlock>
 
       <EmailButton href={manageUrl}>View request</EmailButton>

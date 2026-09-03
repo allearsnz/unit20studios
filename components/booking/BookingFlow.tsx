@@ -685,7 +685,7 @@ export function BookingFlow({
               title="Review & book"
               hint={
                 isFirstBooking
-                  ? "Last look. We'll hold this slot and confirm once your ID checks out. Payment happens in person."
+                  ? "Last look. We'll hold this slot and email you a link to upload photo ID — that's what confirms it. Payment happens in person."
                   : "Last look. Payment happens in person."
               }
             >

@@ -28,9 +28,8 @@ export default function BookingReminder({
       <EmailHeading>See you soon.</EmailHeading>
       <EmailText>
         Quick reminder, {firstName} — your Unit 20 session is about 24 hours
-        away. Bring a USB or two with your tracks, your own headphones, and
-        photo ID if it&apos;s your first visit. Buzz the roller door on
-        Southwark Street when you arrive.
+        away. Bring a USB or two with your tracks and your own headphones. Buzz
+        the roller door on Southwark Street when you arrive.
       </EmailText>
 
       <DetailPanel

@@ -24,9 +24,9 @@ export default function IdVerificationRequest({
     >
       <EmailHeading>One quick thing.</EmailHeading>
       <EmailText>
-        Thanks for booking, {firstName}. Before your first session we need to
-        check your ID — it&apos;s a one-off, and once it&apos;s done you never
-        have to do it again.
+        Thanks for booking, {firstName}. Your slot is held, but we can&apos;t
+        confirm your first session until we&apos;ve checked your ID — it&apos;s
+        a one-off, and once it&apos;s done you never have to do it again.
       </EmailText>
       <EmailText>
         Tap below and upload a photo of the <strong>front and back</strong> of
@@ -44,8 +44,9 @@ export default function IdVerificationRequest({
       </InfoBlock>
 
       <EmailText>
-        Your booking is held either way — approving your ID is what turns it
-        into a confirmed session. Questions? Just reply.
+        Please do this before the day — approving your upload is what turns the
+        booking into a confirmed session, and we can&apos;t check ID at the
+        door. Questions, or the link won&apos;t play ball? Just reply.
       </EmailText>
     </EmailLayout>
   );

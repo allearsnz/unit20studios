@@ -8,7 +8,7 @@ export const STUDIO_TERMS: { title: string; body: string }[] = [
   },
   {
     title: "First booking & ID",
-    body: "You must be 16 or over to book. Your first session needs a quick photo ID check on arrival (driver licence, passport or similar) — it's about knowing who's using the gear, not your age. Once you're verified, future bookings confirm instantly.",
+    body: "You must be 16 or over to book. Your first booking is held rather than confirmed until we've checked photo ID (driver licence or passport) — it's about knowing who's using the gear, not your age. We email you a private upload link when you book; it has to come through that link before your session, as we can't verify ID at the door. Once you're verified, future bookings confirm instantly.",
   },
   {
     title: "Cancellations & changes",
@@ -29,7 +29,7 @@ export const STUDIO_TERMS: { title: string; body: string }[] = [
 ];
 
 export const HOUSE_RULES: string[] = [
-  "16+ only. Photo ID on your first visit.",
+  "16+ only. Photo ID uploaded before your first session.",
   "No smoking or vaping inside.",
   "Keep drinks away from the decks.",
   "Bring your own USBs and headphones.",
@@ -40,11 +40,11 @@ export const HOUSE_RULES: string[] = [
 export const BEFORE_YOU_COME: { title: string; body: string }[] = [
   {
     title: "Getting in",
-    body: "We're at 20 Southwark Street in the central city. Come to the roller door on the street and buzz — someone will let you in for your session. Arrive a couple of minutes early for your first visit so we can run the quick ID check.",
+    body: "We're at 20 Southwark Street in the central city. Come to the roller door on the street and buzz — someone will let you in for your session. If it's your first time, make sure you've sent your ID through the link we emailed: that's what confirms the booking.",
   },
   {
     title: "What to bring",
-    body: "A USB or two with your tunes (FAT32 or exFAT formatted), your own headphones, and ID if it's your first time. That's it — decks, mixer and monitoring are all set up and ready.",
+    body: "A USB or two with your tunes (FAT32 or exFAT formatted) and your own headphones. That's it — decks, mixer and monitoring are all set up and ready. (First-timers: ID goes in beforehand through the link we email you, not on the night.)",
   },
   {
     title: "Who can come",

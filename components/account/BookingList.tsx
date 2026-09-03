@@ -45,6 +45,7 @@ export function BookingList({
   bookings,
   empty,
   idVerified,
+  idSubmitted = false,
   now,
   /** Open every row by default — used for the upcoming list. */
   defaultOpen = false,
@@ -53,6 +54,8 @@ export function BookingList({
   bookings: AccountBooking[];
   empty: string;
   idVerified: boolean;
+  /** Uploaded but not yet approved — stops the tracker chasing them for it. */
+  idSubmitted?: boolean;
   /**
    * The server's clock, read once on the page and passed down.
    *
@@ -93,6 +96,7 @@ export function BookingList({
               end_time: b.end_time,
               access_sent_at: b.access_sent_at,
               idVerified,
+              idSubmitted,
               banked: b.banked_hours_used > 0,
             }, now);
             const isOpen = open.has(b.id) || Boolean(progress.action);
