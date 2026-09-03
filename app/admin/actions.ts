@@ -28,11 +28,17 @@ import {
   type PaidSkipReason,
 } from "@/lib/booking-paid";
 import { sendAccessInstructions, type AccessSendResult } from "@/lib/notifications";
+import { type RequestResult, requestIdVerification } from "@/lib/id-verification";
+// The operations themselves. This file is the ADMIN's way in to them — the
+// cookie session, the ADMIN_EMAIL check and the cache revalidation. The crew
+// app reaches the same functions through `app/api/admin/*` with a crew token.
 import {
-  type RequestResult,
-  removeStoredDocuments,
-  requestIdVerification,
-} from "@/lib/id-verification";
+  bookingEmailProps as emailProps,
+  cancelBookingWithEmail,
+  getFullBooking,
+  resendBookingConfirmation,
+  verifyCustomerId,
+} from "@/lib/admin-ops";
 import { grantMilestoneRewards } from "@/lib/rewards";
 import { creditBankedHours } from "@/lib/banked-hours";
 import { site } from "@/lib/site";
@@ -43,46 +49,14 @@ import {
   normalizeCode,
 } from "@/lib/discounts";
 import BookingConfirmed from "@/emails/BookingConfirmed";
-import BookingReceivedNewCustomer from "@/emails/BookingReceivedNewCustomer";
-import BookingCancelled from "@/emails/BookingCancelled";
 import DiscountOffer from "@/emails/DiscountOffer";
 import type {
   Booking,
   BookingStatus,
   Customer,
-  IdVerification,
   PaymentStatus,
   PricingTier,
 } from "@/lib/types";
-
-type FullBooking = Booking & { customer: Customer; pricing_tier: PricingTier };
-
-async function getFullBooking(id: string): Promise<FullBooking | null> {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("bookings")
-    .select("*, customer:customers(*), pricing_tier:pricing_tiers(*)")
-    .eq("id", id)
-    .maybeSingle();
-  return (data as FullBooking | null) ?? null;
-}
-
-function emailProps(b: FullBooking) {
-  return {
-    firstName: b.customer.name.split(/\s+/)[0] || "there",
-    friendlyId: b.friendly_id,
-    whenLabel: formatBookingWhen(b.start_time, b.end_time),
-    durationHours: b.duration_hours,
-    tierLabel: b.pricing_tier.label,
-    groupSize: b.group_size,
-    total: formatNZDPlusGstIncl(b.total_price_cents),
-    manageUrl: `${site.url}/studio/book/confirmation?id=${b.friendly_id}`,
-    // Prompt an account only if they haven't got one — `auth_user_id` is
-    // stamped when a customers row is linked to a sign-in, so it stops asking
-    // by itself once they sign up.
-    signupUrl: b.customer.auth_user_id ? null : `${site.url}/account/signup`,
-  };
-}
 
 export async function setBookingStatus(id: string, status: BookingStatus) {
   await assertAdmin();
@@ -254,25 +228,7 @@ export async function saveInternalNote(id: string, note: string) {
  */
 export async function verifyCustomer(customerId: string) {
   await assertAdmin();
-  const supabase = createAdminClient();
-  await supabase
-    .from("customers")
-    .update({ id_verified: true, id_verified_at: new Date().toISOString() })
-    .eq("id", customerId);
-
-  const { data } = await supabase
-    .from("id_verifications")
-    .select("id, front_path, back_path")
-    .eq("customer_id", customerId)
-    .maybeSingle();
-  const row = data as Pick<IdVerification, "id" | "front_path" | "back_path"> | null;
-  if (row) {
-    await removeStoredDocuments(supabase, row);
-    await supabase
-      .from("id_verifications")
-      .update({ front_path: null, back_path: null, updated_at: new Date().toISOString() })
-      .eq("id", row.id);
-  }
+  await verifyCustomerId(customerId);
 
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
@@ -325,67 +281,17 @@ export async function adjustBankedHours(formData: FormData) {
 
 export async function cancelBooking(id: string) {
   await assertAdmin();
-  const supabase = createAdminClient();
-
-  // Give back any banked hours this booking drew — but only on the first
-  // transition into 'cancelled', so re-cancelling can't double-refund.
-  const { data: transitioned } = await supabase
-    .from("bookings")
-    .update({ status: "cancelled" })
-    .eq("id", id)
-    .neq("status", "cancelled")
-    .select("customer_id, friendly_id, banked_hours_used")
-    .maybeSingle();
-  const t = transitioned as
-    | { customer_id: string; friendly_id: string; banked_hours_used: number }
-    | null;
-  if (t && t.banked_hours_used > 0) {
-    await creditBankedHours(supabase, {
-      customerId: t.customer_id,
-      hours: t.banked_hours_used,
-      reason: "session_refund",
-      bookingId: id,
-      note: `Cancelled booking ${t.friendly_id}`,
-    });
-  }
-
-  const booking = await getFullBooking(id);
-  if (booking?.customer.email) {
-    await sendEmail({
-      to: booking.customer.email,
-      subject: `Your booking ${booking.friendly_id} has been cancelled`,
-      react: createElement(BookingCancelled, {
-        firstName: booking.customer.name.split(/\s+/)[0] || "there",
-        friendlyId: booking.friendly_id,
-        whenLabel: formatBookingWhen(booking.start_time, booking.end_time),
-        bookUrl: `${site.url}/studio/book`,
-      }),
-    });
-  }
+  // Refunds any banked hours the booking drew and emails the customer — see
+  // lib/admin-ops.ts. Only the first transition into 'cancelled' does either,
+  // so a double-click can't double-refund.
+  await cancelBookingWithEmail(id);
   revalidatePath(`/admin/bookings/${id}`);
   revalidatePath("/admin");
 }
 
 export async function resendConfirmation(id: string) {
   await assertAdmin();
-  const booking = await getFullBooking(id);
-  if (!booking?.customer.email) return;
-  const props = emailProps(booking);
-  if (booking.status === "confirmed" || booking.status === "completed") {
-    const ics = buildBookingIcs(booking);
-    await sendEmail({
-      to: booking.customer.email,
-      subject: `You're booked — ${booking.friendly_id}`,
-      react: createElement(BookingConfirmed, props),
-      attachments: ics ? [icsAttachment(`unit20-${booking.friendly_id}.ics`, ics)] : undefined,
-    });
-  } else {
-    await sendEmail({
-      to: booking.customer.email,
-      subject: `We've got your booking request — ${booking.friendly_id}`,
-      react: createElement(BookingReceivedNewCustomer, props),
-    });
-  }
+  await resendBookingConfirmation(id);
 }
 
 /**

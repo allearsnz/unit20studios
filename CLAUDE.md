@@ -178,6 +178,22 @@ Points worth knowing before changing any of it:
   that it happened. Superseded uploads are deleted on re-submission too.
 - `requestIdVerification()` never throws — an email failure must not cost
   someone their booking. Admins can always resend from either page.
+- **Uploading is the only path — don't re-offer the door.** The enforcement was
+  always structural (an unverified booking sits at `pending_verification`,
+  nothing downstream fires, and the cleanup cron warns then releases the slot),
+  but the customer-facing copy used to say "or just bring it on the day". That
+  was a cheque the rest of the system doesn't cash: nothing about arriving with
+  a licence confirms a booking, issues a door code or sends access
+  instructions. The confirmation page, `BookingReceivedNewCustomer`,
+  `IdVerificationRequest`, `BookingReminder`, `lib/legal.ts` (terms, house
+  rules, before-you-come) and the review step of `BookingFlow` now all say the
+  same thing. If you add a surface that mentions ID, match them.
+- `bookingProgress()` takes **`idSubmitted`** as well as `idVerified`, because
+  "we're waiting on you" and "we've got it, we're checking" are different
+  sentences and only the first is `waitingOnYou`. It's optional and defaults to
+  false — a caller that doesn't know defaults to nagging, which is the safe way
+  round. `/studio/book/confirmation` and `/account` both read it (a small
+  separate query, not an embed — see the comment on `hasUploadedId`).
 
 **Banked hours** — the 10-hour pack banks 10 hours to the customer's account (the
 first 2h session draws down immediately, leaving 8). Signed-in customers with a
@@ -294,8 +310,80 @@ same network call again.
 
 **Cron** (in `vercel.json`, all guarded by `CRON_SECRET` as a bearer token):
 `/api/cron/reminders` (24h-out), `/api/cron/post-session` (2h after end — marks
-completed, follow-up email, mints rewards), `/api/cron/cleanup` (daily, deletes
-`pending_verification` bookings older than 72h).
+completed, follow-up email, mints rewards), `/api/cron/cleanup` (daily).
+
+`cleanup` **releases, it doesn't delete** (crew `0120`). It reads the pending
+bookings and decides in code, because the old version expressed the whole policy
+as a `DELETE ... WHERE` and destroyed rows before anyone could look at them. It
+re-sends the ID link once, waits, then *cancels* — returning any banked hours —
+and it never touches a session that has already started or is inside 12 hours:
+someone turning up unverified is a conversation at the door, not a silent
+deletion. The reminder stamp is only written when the email actually sent.
+
+## Thinking about folding this into the crew app?
+
+`docs/CONSOLIDATION-BRIEF.md` is the full write-up: every feature, the shared
+data model in both directions, what the crew app can and can't do with studio
+data today, and a costed answer. Short version — the split isn't between
+"studio data" and "crew data", it's between **data** (already shared, crew
+already has the write grant via `studio.manage`) and **automation** (eleven
+emails, three crons, the ID pipeline, Xero — all server-side here, and the crew
+app is an SPA with no server). Move the screens, not the automation.
+
+That is now built on both sides. `../all-ears-crew/docs/STUDIO-BRIDGE.md` records
+what the crew app does directly against the database; the section below is this
+repo's half.
+
+## The crew-facing admin API (`app/api/admin/*`)
+
+Six endpoints the crew app at `crew.allears.nz` calls when an action genuinely
+needs the **service role** and a server. Everything else it does — status,
+payment, notes, invoicing, customer edits — goes straight to Postgres under crew
+RLS (`0042` reads, `0163` writes), and marking a booking paid still fires the
+door code and the access email because both of those listen to the *database*,
+not to this app's UI.
+
+| Route | Wraps | Why it can't be crew-side |
+|---|---|---|
+| `GET /customers/:id/id-documents` | `idDocumentsForCustomer` | 5-minute signed URLs into a bucket that RLS-denies everyone |
+| `POST /customers/:id/verify` | `verifyCustomerId` | sets the flag **and deletes both images** |
+| `POST /customers/:id/id-link` | `requestIdVerification` | writes a hashed token to `id_verifications` (RLS on, no policy) |
+| `POST /bookings/:id/cancel` | `cancelBookingWithEmail` | the cancellation email + the banked-hours refund |
+| `POST /bookings/:id/resend-confirmation` | `resendBookingConfirmation` | React Email + Resend |
+| `POST /bookings/:id/resend-access` | `sendAccessInstructions` | same, idempotent via `access_sent_at` |
+
+Things to know before changing any of it:
+
+- **Auth is a crew member's own Supabase access token, not a shared secret.**
+  `lib/crew-auth.ts` verifies it with `getClaims()` — same project, ES256, local
+  WebCrypto, no `getUser()` round trip — then asks the database
+  `has_perm('studio.manage')` **as that user**. Not `ADMIN_EMAIL`: that is one
+  person, whereas `studio.manage` is the exact key the crew app gates its own
+  buttons on, so the button and the endpoint cannot disagree. It resolves today
+  to the three crew admins. A permission revoked this morning is refused this
+  afternoon — that one is read live, every call.
+- **Never answer 404.** `src/lib/studioApi.ts` in the crew app reads a 404 as
+  "this build of the studio app hasn't shipped the endpoint" and quietly
+  degrades to a link. "No such customer" is **422**; "nothing to do here"
+  (already verified, already cancelled, already sent) is **409**.
+- **CORS is `https://crew.allears.nz` only**, and unknown origins get no
+  `Access-Control-Allow-Origin` at all. There is no
+  `Access-Control-Allow-Credentials` — auth is a bearer token the crew app
+  attaches by hand, never a cookie, so a cross-site request carries no ambient
+  authority even if the origin check were wrong. Error responses carry the CORS
+  headers too; without that a 401 reads to the crew app as "the studio is down"
+  instead of "sign in again".
+- **`lib/admin-ops.ts` is the one implementation.** The four operations used to
+  live inside `app/admin/actions.ts` behind `assertAdmin()`. They now sit in a
+  lib module with no opinion about who asked, and there are two callers with two
+  ways of proving identity: the server actions (cookie session + ADMIN_EMAIL +
+  `revalidatePath`) and these routes (crew token + `studio.manage`). Don't add a
+  third path that re-implements one — in particular one that sets `id_verified`
+  without deleting the images, which is the exact failure the ID pipeline exists
+  to prevent.
+- The crew app ships with `VITE_STUDIO_API_URL` **unset**, and while it is unset
+  those screens render a link to `/admin` rather than a button. Setting it is
+  what turns these on.
 
 ## Current state / known gaps
 
