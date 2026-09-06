@@ -11,9 +11,14 @@ const ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,applicatio
 export function IdUploadForm({
   token,
   resubmitting = false,
+  onSubmitted,
 }: {
   token: string;
   resubmitting?: boolean;
+  /** Told when the upload lands. A parent that passes this owns the "thanks"
+   *  message — the built-in card below would be a second one saying the same
+   *  thing in a different box. */
+  onSubmitted?: () => void;
 }) {
   const [docType, setDocType] = useState<DocType>("drivers_licence");
   const [front, setFront] = useState<File | null>(null);
@@ -49,11 +54,14 @@ export function IdUploadForm({
         return;
       }
       setDone(true);
+      onSubmitted?.();
     } catch {
       setError("Couldn't reach the studio. Check your connection and try again.");
     }
     setBusy(false);
   };
+
+  if (done && onSubmitted) return null;
 
   if (done) {
     return (

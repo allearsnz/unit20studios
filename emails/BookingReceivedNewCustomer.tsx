@@ -32,9 +32,9 @@ export default function BookingReceivedNewCustomer({
       <EmailText>
         Thanks, {firstName}. We&apos;re holding the slot, but since this is your
         first session it isn&apos;t confirmed until we&apos;ve checked your ID.
-        There&apos;s a separate email on its way with a link — upload a photo of
-        your driver licence or passport and we&apos;ll take it from there.
-        It&apos;s a one-off, and after that your bookings confirm instantly.
+        There&apos;s an upload form waiting on your booking page — a photo of
+        your driver licence or passport is all it takes. It&apos;s a one-off,
+        and after that your bookings confirm instantly.
       </EmailText>
 
       <DetailPanel
@@ -53,14 +53,15 @@ export default function BookingReceivedNewCustomer({
       {packNote ? <EmailText>{packNote}</EmailText> : null}
 
       <InfoBlock label="What happens next">
-        Send us your ID through the link in the other email and we&apos;ll do
-        the rest — you&apos;ll get a confirmation once you&apos;re verified. It
-        has to come through the link before the day; we can&apos;t check it at
+        Send us your ID and we&apos;ll do the rest — you&apos;ll get a
+        confirmation once you&apos;re verified. Use the button below, or the
+        upload link we&apos;ll email you separately if you haven&apos;t done it
+        already. It has to be uploaded before the day; we can&apos;t check it at
         the door. On the day, bring a USB with your tracks and your own
         headphones.
       </InfoBlock>
 
-      <EmailButton href={manageUrl}>View request</EmailButton>
+      <EmailButton href={manageUrl}>Upload my ID</EmailButton>
       {signupUrl ? <AccountPrompt signupUrl={signupUrl} /> : null}
     </EmailLayout>
   );

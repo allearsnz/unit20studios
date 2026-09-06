@@ -181,6 +181,12 @@ export function buildSteps(
       detail: "Nothing was uploaded; this customer was verified another way.",
     });
   } else {
+    // Two different nulls. A link is now *minted* at booking and offered on the
+    // confirmation page there and then; the email is held back five minutes and
+    // only goes to people who didn't finish on the page. So "no `sent_at`" no
+    // longer means "nobody has been asked" — if the row exists, they were asked
+    // on screen. Collapsing the two would have this panel reporting a fault
+    // every time the flow worked exactly as designed.
     steps.push({
       key: "id_link",
       label: "ID upload link emailed",
@@ -192,7 +198,9 @@ export function buildSteps(
           : "One-off upload link is in their inbox."
         : cancelled
           ? "Booking cancelled before a link was needed."
-          : "No link has gone out. Send one from the ID tab.",
+          : idCheck
+            ? "Link issued and put in front of them on the confirmation page. No email yet — one goes out automatically if they don't finish there."
+            : "No link has gone out. Send one from the ID tab.",
       action: idCheck?.sent_at || cancelled ? undefined : "send_id_link",
     });
 

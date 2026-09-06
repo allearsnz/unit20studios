@@ -22,6 +22,20 @@ type SendArgs = {
 export type SendResult = { ok: boolean; id?: string; error?: string };
 
 /**
+ * Resend caps us at a couple of requests a second, and several flows here send
+ * two or three emails back to back (customer + admin, then anything else the
+ * route wants). Losing one of those to a 429 looks exactly like an email that
+ * was never written — so a throttled send waits and goes again rather than
+ * being reported as a failure.
+ */
+const RATE_LIMIT_RETRY_MS = 1200;
+
+function isRateLimited(error: { name?: string; message?: string } | null): boolean {
+  const s = `${error?.name ?? ""} ${error?.message ?? ""}`.toLowerCase();
+  return s.includes("rate_limit") || s.includes("too many requests") || s.includes("rate limit");
+}
+
+/**
  * Send via Resend. Never throws — booking/contact creation must not be blocked
  * by an email failure. Logs full context on error so a human can resend from
  * the admin booking detail page. In dev without RESEND_API_KEY, it no-ops.
@@ -31,16 +45,24 @@ export async function sendEmail(args: SendArgs): Promise<SendResult> {
     console.warn(`[email] RESEND_API_KEY not set — skipped "${args.subject}" → ${args.to}`);
     return { ok: false, error: "email_not_configured" };
   }
+  const payload = {
+    from: `Unit 20 <${FROM}>`,
+    to: args.to,
+    subject: args.subject,
+    replyTo: args.replyTo ?? REPLY_TO,
+    ...(args.react ? { react: args.react } : {}),
+    ...(args.text ? { text: args.text } : {}),
+    ...(args.attachments ? { attachments: args.attachments } : {}),
+  } as Parameters<typeof resend.emails.send>[0];
+
   try {
-    const { data, error } = await resend.emails.send({
-      from: `Unit 20 <${FROM}>`,
-      to: args.to,
-      subject: args.subject,
-      replyTo: args.replyTo ?? REPLY_TO,
-      ...(args.react ? { react: args.react } : {}),
-      ...(args.text ? { text: args.text } : {}),
-      ...(args.attachments ? { attachments: args.attachments } : {}),
-    } as Parameters<typeof resend.emails.send>[0]);
+    let { data, error } = await resend.emails.send(payload);
+
+    if (error && isRateLimited(error)) {
+      console.warn("[email] rate limited — retrying once", { subject: args.subject });
+      await new Promise((r) => setTimeout(r, RATE_LIMIT_RETRY_MS));
+      ({ data, error } = await resend.emails.send(payload));
+    }
 
     if (error) {
       console.error("[email] send failed", { subject: args.subject, to: args.to, error });

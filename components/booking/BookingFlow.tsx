@@ -15,6 +15,7 @@ import { TermsAccordion } from "./TermsAccordion";
 import { BookingSummary } from "./BookingSummary";
 import { DiscountField, type DiscountState } from "./DiscountField";
 import { detailsSchema, type DetailsValues, type Slot } from "./types";
+import { stashIdToken } from "@/lib/id-handoff";
 import {
   BANKED_OPTIONS,
   TIER_SLUG,
@@ -457,6 +458,13 @@ export function BookingFlow({
           value: (data.totalCents ?? price?.totalCents ?? 0) / 100,
           currency: "NZD",
         });
+      }
+      // A first-timer gets their ID upload token handed back with the booking.
+      // Park it for the confirmation page, which puts the upload form in front
+      // of them while they're still here — the email only follows if they
+      // don't finish. It never goes in the URL (see lib/id-handoff.ts).
+      if (data.idUploadToken) {
+        stashIdToken(data.friendlyId, data.idUploadToken);
       }
       router.push(`/studio/book/confirmation?id=${encodeURIComponent(data.friendlyId)}`);
     } catch {

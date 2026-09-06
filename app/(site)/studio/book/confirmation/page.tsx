@@ -6,6 +6,7 @@ import { getCustomerSession } from "@/lib/customer-auth";
 import { bookingProgress } from "@/lib/booking-progress";
 import { BookingProgress } from "@/components/account/BookingProgress";
 import { CreateAccountCta } from "@/components/account/CreateAccountCta";
+import { IdVerifyPanel } from "@/components/verify/IdVerifyPanel";
 import { formatBookingWhen } from "@/lib/timezone";
 import {
   formatNZDPlusGst,
@@ -76,7 +77,8 @@ export default async function ConfirmationPage({
   // await is ~2ms here. `loadBooking` is the query that must not grow risk:
   // anything that makes it return null tells someone their booking doesn't
   // exist.
-  const idSubmitted = needsId && customer ? await hasUploadedId(customer.id) : false;
+  const idState = needsId && customer ? await idLinkState(customer.id) : null;
+  const idSubmitted = idState?.submitted ?? false;
 
   const progress = booking
     ? bookingProgress({
@@ -121,12 +123,23 @@ export default async function ConfirmationPage({
               ? needsId
                 ? idSubmitted
                   ? "We've got your booking request and your ID. We'll check it over and email your confirmation shortly."
-                  : "We've got your booking request, and we're holding the slot. It's your first session, so we need to see photo ID before we can confirm it — we've emailed you a link to upload it."
+                  : "We've got your booking request, and we're holding the slot. It's your first session, so we need to see photo ID before we can confirm it — do it right here and it's off your plate."
                 : "We've got your booking request. Check your email for the details."
               : id
                 ? `We've recorded your booking (${id}). Check your email for the full details.`
                 : "We couldn't find that booking reference. Check your email for confirmation, or get in touch."}
         </p>
+
+        {/* The ask, at the one moment we know they're here. Above the progress
+            list and the receipt on purpose: it is the only thing on this page
+            that needs them to do something, and burying it under a table of
+            details they already know is how the emailed version got ignored. */}
+        {needsId && !idSubmitted && booking ? (
+          <IdVerifyPanel
+            friendlyId={booking.friendly_id}
+            alreadyEmailed={idState?.emailed ?? false}
+          />
+        ) : null}
 
         {progress ? (
           <div className="mt-10 border-t border-border pt-8">
@@ -260,20 +273,23 @@ async function loadBooking(id: string | undefined): Promise<ConfirmBooking | nul
   }
 }
 
-/** Have they sent their ID in yet? Only ever asked about an unverified
- *  customer. Failure reads as "not yet", which is the safe way round: the page
- *  nags someone who has already uploaded rather than going quiet on someone who
- *  hasn't. */
-async function hasUploadedId(customerId: string): Promise<boolean> {
+/** Where their ID check is up to. Only ever asked about an unverified customer.
+ *
+ *  Failure reads as "not yet, nothing emailed", which is the safe way round on
+ *  both counts: the page nags someone who has already uploaded rather than
+ *  going quiet on someone who hasn't, and it offers to send a link rather than
+ *  telling someone to go and look for one that isn't there. */
+async function idLinkState(customerId: string): Promise<{ submitted: boolean; emailed: boolean }> {
   try {
     const { data } = await createAdminClient()
       .from("id_verifications")
-      .select("submitted_at")
+      .select("submitted_at, sent_at")
       .eq("customer_id", customerId)
       .maybeSingle();
-    return !!(data as { submitted_at: string | null } | null)?.submitted_at;
+    const row = data as { submitted_at: string | null; sent_at: string | null } | null;
+    return { submitted: !!row?.submitted_at, emailed: !!row?.sent_at };
   } catch {
-    return false;
+    return { submitted: false, emailed: false };
   }
 }
 

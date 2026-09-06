@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import IdVerificationRequest from "@/emails/IdVerificationRequest";
 import { sendEmail } from "./email";
 import { createAdminClient } from "./supabase/admin";
+import { ON_PAGE_GRACE_MS } from "./id-handoff";
 import { site } from "./site";
 import type { Customer, IdVerification } from "./types";
 
@@ -54,83 +55,253 @@ export function verifyIdUrl(token: string): string {
   return `${site.url}/verify-id/${token}`;
 }
 
+type CustomerLite = Pick<Customer, "id" | "name" | "email" | "id_verified">;
+
+const CUSTOMER_FIELDS = "id, name, email, id_verified";
+
 export type RequestResult =
   | { status: "sent"; email: string }
   | { status: "skipped"; reason: "already_verified" | "customer_not_found" | "no_email" }
   | { status: "failed"; reason: string };
 
+/** Mint a fresh token onto the customer's row, killing whatever was there. */
+async function rotateToken(
+  supabase: SupabaseClient,
+  customerId: string,
+): Promise<{ token: string } | { error: string }> {
+  const token = randomBytes(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + LINK_TTL_DAYS * 24 * 3600 * 1000).toISOString();
+
+  // Rotate the token and clear any previous submission: whatever they upload
+  // through the new link is what the admin should be looking at.
+  const { data: existing } = await supabase
+    .from("id_verifications")
+    .select("id, send_count, front_path, back_path")
+    .eq("customer_id", customerId)
+    .maybeSingle();
+  const prior = existing as Pick<
+    IdVerification,
+    "id" | "send_count" | "front_path" | "back_path"
+  > | null;
+
+  if (prior) await removeStoredDocuments(supabase, prior);
+
+  const { error } = await supabase.from("id_verifications").upsert(
+    {
+      customer_id: customerId,
+      token_hash: hashToken(token),
+      expires_at: expiresAt,
+      front_path: null,
+      back_path: null,
+      doc_type: null,
+      submitted_at: null,
+      // Unsent, on purpose. `sent_at` is now a record of an email that actually
+      // left, which is what makes `sweepUnsentIdLinks` able to find the people
+      // who were issued a link and never got one — the exact hole this whole
+      // change exists to close.
+      sent_at: null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "customer_id" },
+  );
+  if (error) return { error: error.message };
+  return { token };
+}
+
+/** Email one specific token and stamp the send. Callers own the token's life. */
+async function emailToken(
+  supabase: SupabaseClient,
+  customer: Pick<Customer, "id" | "name" | "email">,
+  token: string,
+): Promise<RequestResult> {
+  const sent = await sendEmail({
+    to: customer.email,
+    subject: "One quick thing — verify your ID for Unit 20",
+    react: createElement(IdVerificationRequest, {
+      firstName: customer.name.split(/\s+/)[0] || "there",
+      verifyUrl: verifyIdUrl(token),
+      expiryDays: LINK_TTL_DAYS,
+    }),
+  });
+  if (!sent.ok) return { status: "failed", reason: sent.error ?? "send_failed" };
+
+  // Stamped only on a send that actually went. A failed send leaves the row
+  // looking exactly like an unsent one, which is correct: the sweep will try
+  // again rather than counting a bounce as delivery.
+  const { data: row } = await supabase
+    .from("id_verifications")
+    .select("send_count")
+    .eq("customer_id", customer.id)
+    .maybeSingle();
+  await supabase
+    .from("id_verifications")
+    .update({
+      sent_at: new Date().toISOString(),
+      send_count: ((row as { send_count: number } | null)?.send_count ?? 0) + 1,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("customer_id", customer.id);
+
+  return { status: "sent", email: customer.email };
+}
+
+async function loadCustomer(
+  supabase: SupabaseClient,
+  customerId: string,
+): Promise<CustomerLite | null> {
+  const { data } = await supabase
+    .from("customers")
+    .select(CUSTOMER_FIELDS)
+    .eq("id", customerId)
+    .maybeSingle();
+  return (data as CustomerLite | null) ?? null;
+}
+
 /**
- * Create (or rotate) a customer's upload link and email it. Rotating in place
- * kills the previous link — a resend must not leave two working ways in.
+ * Create (or rotate) a customer's upload link and email it *now*. Rotating in
+ * place kills the previous link — a resend must not leave two working ways in.
  *
- * Never throws: this runs off the back of booking creation and an email problem
- * must not cost someone their slot.
+ * This is the admin/crew/cron path: nobody is sitting in front of a page, so
+ * the email is the only way in and it goes immediately. The booking flow uses
+ * `createIdVerificationLink` instead.
+ *
+ * Never throws: an email problem must not cost someone their slot.
  */
 export async function requestIdVerification(customerId: string): Promise<RequestResult> {
   try {
     const supabase = createAdminClient();
-
-    const { data } = await supabase
-      .from("customers")
-      .select("id, name, email, id_verified")
-      .eq("id", customerId)
-      .maybeSingle();
-    const customer = data as Pick<Customer, "id" | "name" | "email" | "id_verified"> | null;
+    const customer = await loadCustomer(supabase, customerId);
 
     if (!customer) return { status: "skipped", reason: "customer_not_found" };
     if (customer.id_verified) return { status: "skipped", reason: "already_verified" };
     if (!customer.email) return { status: "skipped", reason: "no_email" };
 
-    const token = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + LINK_TTL_DAYS * 24 * 3600 * 1000).toISOString();
+    const minted = await rotateToken(supabase, customerId);
+    if ("error" in minted) return { status: "failed", reason: minted.error };
 
-    // Rotate the token and clear any previous submission: whatever they upload
-    // through the new link is what the admin should be looking at.
-    const { data: existing } = await supabase
-      .from("id_verifications")
-      .select("id, send_count, front_path, back_path")
-      .eq("customer_id", customerId)
-      .maybeSingle();
-    const prior = existing as Pick<
-      IdVerification,
-      "id" | "send_count" | "front_path" | "back_path"
-    > | null;
-
-    if (prior) await removeStoredDocuments(supabase, prior);
-
-    const { error } = await supabase.from("id_verifications").upsert(
-      {
-        customer_id: customerId,
-        token_hash: hashToken(token),
-        expires_at: expiresAt,
-        front_path: null,
-        back_path: null,
-        doc_type: null,
-        submitted_at: null,
-        sent_at: new Date().toISOString(),
-        send_count: (prior?.send_count ?? 0) + 1,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "customer_id" },
-    );
-    if (error) return { status: "failed", reason: error.message };
-
-    const sent = await sendEmail({
-      to: customer.email,
-      subject: "One quick thing — verify your ID for Unit 20",
-      react: createElement(IdVerificationRequest, {
-        firstName: customer.name.split(/\s+/)[0] || "there",
-        verifyUrl: verifyIdUrl(token),
-        expiryDays: LINK_TTL_DAYS,
-      }),
-    });
-    if (!sent.ok) return { status: "failed", reason: sent.error ?? "send_failed" };
-
-    return { status: "sent", email: customer.email };
+    return await emailToken(supabase, customer, minted.token);
   } catch (err) {
     console.error("[id-verification] request failed", { customerId, err });
     return { status: "failed", reason: err instanceof Error ? err.message : "unknown" };
   }
+}
+
+export type CreateLinkResult =
+  | { status: "ready"; token: string }
+  | { status: "skipped"; reason: "already_verified" | "customer_not_found" | "no_email" }
+  | { status: "failed"; reason: string };
+
+/**
+ * Mint the link and hand it straight back to the caller instead of emailing it.
+ *
+ * Used by booking creation: the token goes to the browser that just booked, the
+ * confirmation page puts the upload form in front of them, and the email is
+ * held back for `ON_PAGE_GRACE_MS`. Nothing is lost if they never come back —
+ * the row exists, unsent, and the sweep picks it up.
+ *
+ * Never throws, for the same reason `requestIdVerification` doesn't.
+ */
+export async function createIdVerificationLink(customerId: string): Promise<CreateLinkResult> {
+  try {
+    const supabase = createAdminClient();
+    const customer = await loadCustomer(supabase, customerId);
+
+    if (!customer) return { status: "skipped", reason: "customer_not_found" };
+    if (customer.id_verified) return { status: "skipped", reason: "already_verified" };
+    // No email address means the sweep can never rescue them, so refuse to mint
+    // a link that only exists on one page — the admin gets the usual "no link
+    // has gone out" flag instead.
+    if (!customer.email) return { status: "skipped", reason: "no_email" };
+
+    const minted = await rotateToken(supabase, customerId);
+    if ("error" in minted) return { status: "failed", reason: minted.error };
+
+    return { status: "ready", token: minted.token };
+  } catch (err) {
+    console.error("[id-verification] create link failed", { customerId, err });
+    return { status: "failed", reason: err instanceof Error ? err.message : "unknown" };
+  }
+}
+
+export type SendExistingResult =
+  | { status: "sent"; email: string }
+  | { status: "skipped"; reason: "already_sent" | "already_submitted" | "already_verified" | "no_email" }
+  | { status: "failed"; reason: "not_found" | "expired" | string };
+
+/**
+ * Email a link the customer is already holding, without rotating it.
+ *
+ * This is what the confirmation page calls when its five minutes are up or the
+ * customer closes the tab. NOT rotating is the whole point: someone who wanders
+ * back to that still-open page half an hour later must not find the form dead
+ * because we posted them a different token in the meantime.
+ */
+export async function sendIdVerificationLink(token: string): Promise<SendExistingResult> {
+  try {
+    const lookup = await verificationByToken(token);
+    if (!lookup.ok) return { status: "failed", reason: lookup.reason };
+    if (lookup.verification.submitted_at) return { status: "skipped", reason: "already_submitted" };
+    if (lookup.verification.sent_at) return { status: "skipped", reason: "already_sent" };
+
+    const supabase = createAdminClient();
+    const customer = await loadCustomer(supabase, lookup.customer.id);
+    if (!customer) return { status: "failed", reason: "not_found" };
+    if (customer.id_verified) return { status: "skipped", reason: "already_verified" };
+    if (!customer.email) return { status: "skipped", reason: "no_email" };
+
+    const result = await emailToken(supabase, customer, token);
+    return result.status === "sent"
+      ? { status: "sent", email: result.email }
+      : { status: "failed", reason: result.status === "failed" ? result.reason : "send_failed" };
+  } catch (err) {
+    console.error("[id-verification] send existing link failed", { err });
+    return { status: "failed", reason: err instanceof Error ? err.message : "unknown" };
+  }
+}
+
+/**
+ * The safety net: anyone issued a link who never used it and never got an
+ * email.
+ *
+ * The browser is meant to ask for the email itself (a timer, and a beacon when
+ * the tab goes), but a browser is not a guarantee — tabs get killed, JS gets
+ * blocked, phones fall asleep mid-upload. This runs off the back of ordinary
+ * traffic and the nightly cleanup, and it is the thing that means "we never
+ * sent them a link" can't happen twice.
+ *
+ * Rotates before sending, unlike `sendIdVerificationLink`: by definition nobody
+ * is holding the page any more, so the old token has no one to disappoint.
+ */
+export async function sweepUnsentIdLinks(limit = 25): Promise<{ sent: number; failed: number }> {
+  let sent = 0;
+  let failed = 0;
+  try {
+    const supabase = createAdminClient();
+    const cutoff = new Date(Date.now() - ON_PAGE_GRACE_MS).toISOString();
+
+    const { data } = await supabase
+      .from("id_verifications")
+      .select("customer_id, customer:customers(id, id_verified)")
+      .is("sent_at", null)
+      .is("submitted_at", null)
+      .lt("updated_at", cutoff)
+      .limit(limit);
+
+    type Row = { customer_id: string; customer: { id_verified: boolean } | { id_verified: boolean }[] | null };
+    for (const row of (data as Row[] | null) ?? []) {
+      const c = Array.isArray(row.customer) ? row.customer[0] : row.customer;
+      // Verified in the meantime — Will cleared them in person while they were
+      // still on the page. Nothing to chase.
+      if (!c || c.id_verified) continue;
+      const res = await requestIdVerification(row.customer_id);
+      if (res.status === "sent") sent += 1;
+      else if (res.status === "failed") failed += 1;
+    }
+  } catch (err) {
+    console.error("[id-verification] sweep failed", { err });
+  }
+  if (sent || failed) console.info("[id-verification] swept unsent links", { sent, failed });
+  return { sent, failed };
 }
 
 export type TokenLookup =

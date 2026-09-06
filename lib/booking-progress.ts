@@ -140,7 +140,7 @@ export function bookingProgress(b: ProgressInput, now: number = Date.now()): Boo
       label: "ID check",
       state: "current",
       detail:
-        "Your session isn't confirmed until we've seen photo ID. Check your email for your upload link and send a photo of your driver licence or passport — it takes a minute, it's a one-off, and it has to be done before the day.",
+        "Your session isn't confirmed until we've seen photo ID. Upload a photo of your driver licence or passport — on your booking page, or through the link we email you — it takes a minute, it's a one-off, and it has to be done before the day.",
       waitingOnYou: true,
     });
   }

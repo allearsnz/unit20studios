@@ -3,7 +3,7 @@ import { authorizeCron } from "@/lib/cron";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmin } from "@/lib/email";
 import { creditBankedHours } from "@/lib/banked-hours";
-import { requestIdVerification } from "@/lib/id-verification";
+import { requestIdVerification, sweepUnsentIdLinks } from "@/lib/id-verification";
 
 /**
  * Nightly sweep of bookings that never got verified.
@@ -63,6 +63,15 @@ export async function GET(req: NextRequest) {
   try {
     const supabase = createAdminClient();
     const now = Date.now();
+
+    // Before anything is judged for not verifying: make sure everyone who was
+    // issued a link has actually been given one. A booking is offered the
+    // upload form on the confirmation page and the email is held back five
+    // minutes; if the browser never came back to ask for it, this is the floor
+    // under that. Doing it first matters — the whole point of the warn-then-
+    // release ladder below is that we never release a slot from someone we
+    // never asked.
+    const swept = await sweepUnsentIdLinks(100);
 
     // Read first, decide in code. The old version expressed the whole policy as
     // a DELETE ... WHERE, which is why a rule nobody had thought through was
@@ -166,6 +175,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      id_links_swept: swept.sent,
       warned: warned.length,
       released: released.length,
       held_back_imminent: heldBackImminent.length,

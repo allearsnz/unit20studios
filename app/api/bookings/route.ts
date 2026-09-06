@@ -22,7 +22,7 @@ import {
 } from "@/lib/pricing";
 import { getPricingSettings } from "@/lib/pricing-store";
 import { sendBookingCreatedEmails } from "@/lib/notifications";
-import { requestIdVerification } from "@/lib/id-verification";
+import { createIdVerificationLink } from "@/lib/id-verification";
 import { discountAmountCents, validateDiscountCode } from "@/lib/discounts";
 import type { Booking, Customer, PricingTier } from "@/lib/types";
 
@@ -453,16 +453,24 @@ export async function POST(req: NextRequest) {
     console.error("[bookings] email dispatch failed (booking still created)", e);
   }
 
-  // An unverified customer gets their one-off ID upload link straight away, so
-  // the check is already in motion by the time the admin looks at the booking.
-  // `pending` is exactly "this customer isn't verified", and requestIdVerification
-  // re-checks and never throws — a failure here costs a link, not a booking.
+  // An unverified customer gets their one-off ID upload link straight away —
+  // but handed to the browser that's still open, not posted into an inbox they
+  // may not read for two days. The confirmation page puts the upload form in
+  // front of them there and then; the email follows five minutes later only if
+  // they don't finish (see ON_PAGE_GRACE_MS and sweepUnsentIdLinks).
+  //
+  // `pending` is exactly "this customer isn't verified", and
+  // createIdVerificationLink re-checks and never throws — a failure here costs
+  // a link, not a booking.
+  let idUploadToken: string | null = null;
   if (pending) {
-    const idRequest = await requestIdVerification(customer.id);
-    if (idRequest.status === "failed") {
-      console.error("[bookings] ID verification link not sent", {
+    const idLink = await createIdVerificationLink(customer.id);
+    if (idLink.status === "ready") {
+      idUploadToken = idLink.token;
+    } else if (idLink.status === "failed") {
+      console.error("[bookings] ID verification link not created", {
         customerId: customer.id,
-        reason: idRequest.reason,
+        reason: idLink.reason,
       });
     }
   }
@@ -472,5 +480,9 @@ export async function POST(req: NextRequest) {
     friendlyId: booking.friendly_id,
     status: booking.status,
     totalCents: booking.total_price_cents,
+    // The token, once, to the one browser that just booked. It never goes in a
+    // URL — see the note on the account prompt in CLAUDE.md; a credential in a
+    // query string ends up in history, logs and `Referer`.
+    idUploadToken,
   });
 }

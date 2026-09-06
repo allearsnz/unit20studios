@@ -162,14 +162,48 @@ onto.
 - It's a floor on lead time, not on the calendar: this morning for tonight is fine.
 
 **ID verification** (migration `0013`, `lib/id-verification.ts`) — booking while
-unverified auto-emails a one-off upload link (`/verify-id/[token]`); the customer
-sends the front and back of a licence or passport; the admin sees both images on
-the booking and customer pages and approves with the existing "Mark ID-verified".
+unverified mints a one-off upload link (`/verify-id/[token]`); the customer sends
+the front and back of a licence or passport; the admin sees both images on the
+booking and customer pages and approves with the existing "Mark ID-verified".
 Points worth knowing before changing any of it:
 
+- **The upload is asked for on the page, not in an inbox.** The link used to be
+  emailed the instant a booking landed, and enough of those emails went unread
+  (or unsent — three Resend calls in one second is one 429 away from silence)
+  that people arrived at the cleanup cron's release ladder never having been
+  given a way to verify. So `POST /api/bookings` now calls
+  `createIdVerificationLink()`, which mints the token and hands it back in the
+  response instead of emailing it; `BookingFlow` parks it in `sessionStorage`
+  (`lib/id-handoff.ts`) and `/studio/book/confirmation` renders the real upload
+  form in `IdVerifyPanel` while the customer is still there with their licence
+  out. **The token never goes in a URL** — same reason the signup link carries
+  no email address.
+- **The email is the fallback, and it is on a clock.** `ON_PAGE_GRACE_MS` is 5
+  minutes. The panel asks for it when the timer runs out, when the tab goes
+  (`pagehide`/`visibilitychange` → `sendBeacon`), or when the customer clicks
+  "email me the link instead" — all through
+  `POST /api/verify-id/[token]/send`, which emails **that same token without
+  rotating it**, so a page left open half an hour still has a working form.
+- **The guarantee is server-side: `sweepUnsentIdLinks()`.** A row with
+  `sent_at IS NULL`, `submitted_at IS NULL` and `updated_at` older than the
+  grace period is someone who was issued a link and never got one. It rotates
+  and emails. This is why `sent_at` is now stamped only on a send that actually
+  left, rather than at mint time. It runs from the nightly `cleanup` cron
+  (before the warn/release ladder, deliberately) and as a throttled `after()`
+  heartbeat on `/api/bookings/availability` — Vercel cron on this project's plan
+  is once a day, and a day is longer than someone should wait for their link.
+  Both are idempotent; if a proper scheduler ever exists, point it at the same
+  function.
+- **A row with no `sent_at` is not "nobody was asked" any more.** `lib/automation.ts`
+  distinguishes the two: link issued and shown on the confirmation page vs. no
+  link at all. The "Send ID link" admin action still works from either.
 - **One row per customer** in `id_verifications`. Re-sending *rotates* the token
   in place, so the previous link dies — that's deliberate, and it's also how you
   kill a link that's gone astray. Only the SHA-256 of the token is stored.
+  `POST /api/bookings/[id]/id-link` is the customer-facing resend, for someone
+  who reopens the confirmation page in a tab that has no token; it takes a
+  booking reference and can only ever send the customer's own link to the
+  customer's own address.
 - **Images live in the private `id-documents` bucket**, RLS-denied to everyone;
   the admin sees them through 5-minute signed URLs minted server-side. There is
   no unauthenticated read path.
@@ -193,7 +227,7 @@ Points worth knowing before changing any of it:
   sentences and only the first is `waitingOnYou`. It's optional and defaults to
   false — a caller that doesn't know defaults to nagging, which is the safe way
   round. `/studio/book/confirmation` and `/account` both read it (a small
-  separate query, not an embed — see the comment on `hasUploadedId`).
+  separate query, not an embed — see the comment on `idLinkState`).
 
 **Banked hours** — the 10-hour pack banks 10 hours to the customer's account (the
 first 2h session draws down immediately, leaving 8). Signed-in customers with a

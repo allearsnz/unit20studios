@@ -1,11 +1,41 @@
-import { type NextRequest, NextResponse } from "next/server";
+import { after, type NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { nzDateHourToUtc } from "@/lib/timezone";
 import { weekdayDealApplies } from "@/lib/pricing";
 import { getPricingSettings } from "@/lib/pricing-store";
 import { dayOpensAt, isBookableStart } from "@/lib/booking-window";
+import { sweepUnsentIdLinks } from "@/lib/id-verification";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The heartbeat behind the ID-link fallback.
+ *
+ * A first-timer is offered the upload form on the confirmation page and the
+ * emailed link is held back for five minutes; the browser is supposed to ask
+ * for that email itself when the time is up or the tab goes. Browsers being
+ * browsers, something has to check. This project is on Vercel's Hobby plan,
+ * where cron runs once a day — a day is far too long to leave someone without
+ * a link, given the nightly cleanup eventually releases their slot over exactly
+ * that.
+ *
+ * So the sweep rides on the endpoint the booking calendar already hits on every
+ * date change: it costs one indexed query against a table with a handful of
+ * live rows, it runs in `after()` so it can't add a millisecond to the
+ * response, and it's throttled per warm instance. The nightly cleanup runs the
+ * same sweep as the floor under it.
+ */
+const SWEEP_EVERY_MS = 60 * 1000;
+let lastSweptAt = 0;
+
+function heartbeatSweep() {
+  const now = Date.now();
+  if (now - lastSweptAt < SWEEP_EVERY_MS) return;
+  lastSweptAt = now;
+  after(async () => {
+    await sweepUnsentIdLinks();
+  });
+}
 
 const OPEN_HOUR = 10; // studio opens 10:00
 const CLOSE_HOUR = 24; // slots start 10:00 … 23:00
@@ -23,6 +53,8 @@ export async function GET(req: NextRequest) {
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     return NextResponse.json({ error: "Invalid date (expected YYYY-MM-DD)" }, { status: 400 });
   }
+
+  heartbeatSweep();
 
   const dayStart = nzDateHourToUtc(date, 0).getTime();
   const dayEndIso = new Date(dayStart + 24 * 3600 * 1000).toISOString();
