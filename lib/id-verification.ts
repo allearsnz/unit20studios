@@ -35,6 +35,31 @@ export const ACCEPTED_MIME = [
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
+/**
+ * How long a minted-but-unsent link sits before the server posts one itself.
+ *
+ * Deliberately far longer than `ON_PAGE_GRACE_MS`, and the gap is the point.
+ * The two used to be the same five minutes, which meant the confirmation page's
+ * own timer and `sweepUnsentIdLinks` came due at the same instant — and because
+ * the sweep can only ever *rotate* (it holds the hash, never the token, so it
+ * has no other way to produce a link it can send), whichever won killed the
+ * form the customer was in the middle of filling in. Anyone who took longer
+ * than five minutes to photograph their licence — which is most people — could
+ * end up submitting against a token that had been replaced underneath them,
+ * getting "that link isn't valid any more" on every attempt, on a page that
+ * looked perfectly fine, for as long as they kept trying.
+ *
+ * So the browser gets a clear run at asking for its own email, and this is the
+ * net for the case where it never asked at all. Half an hour is still a
+ * fraction of the cleanup cron's warn-then-release ladder, so nobody's slot is
+ * any closer to being let go than it was.
+ *
+ * Expressed as a multiple of the grace period on purpose: whatever anyone tunes
+ * that to, the sweep stays strictly behind it rather than drifting back into a
+ * tie.
+ */
+export const SWEEP_AFTER_MS = 6 * ON_PAGE_GRACE_MS; // 30 minutes
+
 const EXTENSION: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/png": "png",
@@ -269,15 +294,18 @@ export async function sendIdVerificationLink(token: string): Promise<SendExistin
  * traffic and the nightly cleanup, and it is the thing that means "we never
  * sent them a link" can't happen twice.
  *
- * Rotates before sending, unlike `sendIdVerificationLink`: by definition nobody
- * is holding the page any more, so the old token has no one to disappoint.
+ * Rotates before sending, unlike `sendIdVerificationLink` — it only ever holds
+ * the hash, so there is no existing token for it to put in an email. That is
+ * exactly why it waits `SWEEP_AFTER_MS` rather than `ON_PAGE_GRACE_MS`: a
+ * rotation lands on whoever is still holding that page, and at five minutes
+ * somebody usually is.
  */
 export async function sweepUnsentIdLinks(limit = 25): Promise<{ sent: number; failed: number }> {
   let sent = 0;
   let failed = 0;
   try {
     const supabase = createAdminClient();
-    const cutoff = new Date(Date.now() - ON_PAGE_GRACE_MS).toISOString();
+    const cutoff = new Date(Date.now() - SWEEP_AFTER_MS).toISOString();
 
     const { data } = await supabase
       .from("id_verifications")

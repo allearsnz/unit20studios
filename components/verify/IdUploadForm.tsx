@@ -12,6 +12,7 @@ export function IdUploadForm({
   token,
   resubmitting = false,
   onSubmitted,
+  onTokenDead,
 }: {
   token: string;
   resubmitting?: boolean;
@@ -19,6 +20,14 @@ export function IdUploadForm({
    *  message — the built-in card below would be a second one saying the same
    *  thing in a different box. */
   onSubmitted?: () => void;
+  /** Told when the server says this token is gone — replaced by a newer one, or
+   *  expired. Only the confirmation page can do anything about that (it knows
+   *  the booking reference, so it can ask for a fresh link), and without it the
+   *  customer is left retrying a form that can never succeed. A parent that
+   *  passes this owns the message; without one we fall back to telling them
+   *  plainly rather than saying "please try again" about something that won't
+   *  work the second time either. */
+  onTokenDead?: () => void;
 }) {
   const [docType, setDocType] = useState<DocType>("drivers_licence");
   const [front, setFront] = useState<File | null>(null);
@@ -48,6 +57,14 @@ export function IdUploadForm({
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // A 404 is the one error retrying can't fix: this token has been
+        // replaced or has expired, so every further attempt from this page
+        // fails the same way. Hand it up instead of inviting another go.
+        if (res.status === 404 && onTokenDead) {
+          onTokenDead();
+          setBusy(false);
+          return;
+        }
         setError(data.error || "Something went wrong. Please try again.");
         setBusy(false);
         topRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });

@@ -49,6 +49,8 @@ export function IdVerifyPanel({ friendlyId, alreadyEmailed }: Props) {
   const [uploaded, setUploaded] = useState(false);
   const [emailState, setEmailState] = useState<"idle" | "sending" | "sent" | "failed">("idle");
   const [cleared, setCleared] = useState(false);
+  const [linkDied, setLinkDied] = useState(false);
+  const [recovery, setRecovery] = useState<"sending" | "sent" | "failed">("sending");
 
   // sessionStorage is browser-only, so the server and the hydrating client both
   // have to render as though there's no token — `undefined` is that third
@@ -66,12 +68,13 @@ export function IdVerifyPanel({ friendlyId, alreadyEmailed }: Props) {
   const sentRef = useRef(false);
   const mountedAtRef = useRef(0);
   const uploadedRef = useRef(false);
+  const deadRef = useRef(false);
 
   /** Ask for the email. At most once per page — the timer, the beacon and the
    *  button all funnel through here. */
   const askForEmail = useCallback(
     (leaving: boolean) => {
-      if (!token || sentRef.current || uploadedRef.current) return;
+      if (!token || sentRef.current || uploadedRef.current || deadRef.current) return;
       sentRef.current = true;
       const url = `/api/verify-id/${encodeURIComponent(token)}/send`;
       if (leaving) {
@@ -134,6 +137,31 @@ export function IdVerifyPanel({ friendlyId, alreadyEmailed }: Props) {
     setCleared(true);
   }, [friendlyId]);
 
+  /**
+   * The server says the token in this tab is gone — replaced by a newer one, or
+   * expired.
+   *
+   * Retrying can't fix that, and leaving it in `sessionStorage` means every
+   * reload of this page rebuilds the same form over the same dead token: the
+   * customer sees an upload form, uses it, gets an error, tries again, and gets
+   * the same error forever. Bin it and fall through to the email path, which
+   * mints a fresh link against the booking reference.
+   */
+  const onTokenDead = useCallback(() => {
+    deadRef.current = true;
+    clearIdToken(friendlyId);
+    setCleared(true);
+    setLinkDied(true);
+    // Ask for the replacement here and now rather than leaving a button for
+    // someone who has just been told their upload didn't work. This runs from
+    // an event handler — the upload's own response — so there's no effect and
+    // no extra render pass involved.
+    setRecovery("sending");
+    fetch(`/api/bookings/${encodeURIComponent(friendlyId)}/id-link`, { method: "POST" })
+      .then((r) => setRecovery(r.ok ? "sent" : "failed"))
+      .catch(() => setRecovery("failed"));
+  }, [friendlyId]);
+
   if (uploaded) {
     return (
       <div className="mt-10 border border-accent/40 bg-accent/[0.06] p-7">
@@ -155,6 +183,44 @@ export function IdVerifyPanel({ friendlyId, alreadyEmailed }: Props) {
 
   // Still hydrating — we don't know yet whether this tab has the token.
   if (token === undefined) return null;
+
+  // The token this tab was holding has been retired — an admin resent the link,
+  // or the server sweep posted one. Retrying the form can only fail the same
+  // way, so say what happened and put the replacement in their inbox.
+  if (linkDied) {
+    return (
+      <div className="mt-10 border border-border bg-bg-elev p-7">
+        <p className="eyebrow mb-3">Last step · ID check</p>
+        <h2 className="font-display text-h3 font-semibold text-text">
+          That upload link had already been replaced.
+        </h2>
+        <p className="lead mt-3 text-sm">
+          Your booking is fine and nothing you did caused it — a newer link had
+          been issued, and issuing one retires the last. The newest is always
+          the one that works.
+        </p>
+        {recovery === "sent" ? (
+          <p className="mt-6 flex items-center gap-2 text-sm text-text-muted">
+            <Check className="h-4 w-4 shrink-0 text-accent" aria-hidden />
+            We&apos;ve emailed you a fresh one — open that and the same form
+            will be waiting.
+          </p>
+        ) : recovery === "sending" ? (
+          <p className="mt-6 flex items-center gap-2 text-sm text-text-muted">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
+            Emailing you a fresh one…
+          </p>
+        ) : (
+          <>
+            <p className="mt-6 text-sm text-danger">
+              We couldn&apos;t send the replacement just then.
+            </p>
+            <ResendButton friendlyId={friendlyId} label="Email me a fresh link" />
+          </>
+        )}
+      </div>
+    );
+  }
 
   // No token in this tab — they've come back to the page later, or from the
   // email. The form can't be offered here, so offer the link instead.
@@ -191,7 +257,7 @@ export function IdVerifyPanel({ friendlyId, alreadyEmailed }: Props) {
         never has to happen again.
       </p>
 
-      <IdUploadForm token={token} onSubmitted={onUploaded} />
+      <IdUploadForm token={token} onSubmitted={onUploaded} onTokenDead={onTokenDead} />
 
       <div className="mt-8 border-t border-border pt-6">
         {emailState === "sent" ? (

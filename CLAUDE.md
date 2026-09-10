@@ -183,17 +183,36 @@ Points worth knowing before changing any of it:
   (`pagehide`/`visibilitychange` → `sendBeacon`), or when the customer clicks
   "email me the link instead" — all through
   `POST /api/verify-id/[token]/send`, which emails **that same token without
-  rotating it**, so a page left open half an hour still has a working form.
+  rotating it**, so the emailed link and the open form are the same link.
+  (Whether the form *stays* working is the sweep's business, below — this
+  endpoint alone was never enough to promise it.)
 - **The guarantee is server-side: `sweepUnsentIdLinks()`.** A row with
-  `sent_at IS NULL`, `submitted_at IS NULL` and `updated_at` older than the
-  grace period is someone who was issued a link and never got one. It rotates
-  and emails. This is why `sent_at` is now stamped only on a send that actually
-  left, rather than at mint time. It runs from the nightly `cleanup` cron
-  (before the warn/release ladder, deliberately) and as a throttled `after()`
-  heartbeat on `/api/bookings/availability` — Vercel cron on this project's plan
-  is once a day, and a day is longer than someone should wait for their link.
-  Both are idempotent; if a proper scheduler ever exists, point it at the same
-  function.
+  `sent_at IS NULL`, `submitted_at IS NULL` and `updated_at` older than
+  **`SWEEP_AFTER_MS`** is someone who was issued a link and never got one. It
+  rotates and emails. This is why `sent_at` is now stamped only on a send that
+  actually left, rather than at mint time. It runs from the nightly `cleanup`
+  cron (before the warn/release ladder, deliberately) and as a throttled
+  `after()` heartbeat on `/api/bookings/availability` — Vercel cron on this
+  project's plan is once a day, and a day is longer than someone should wait for
+  their link. Both are idempotent; if a proper scheduler ever exists, point it
+  at the same function.
+- **`SWEEP_AFTER_MS` is 6 × `ON_PAGE_GRACE_MS`, and the gap is load-bearing.**
+  They were the same five minutes, and that was the U20-2026-0014 bug: the
+  sweep can only ever *rotate* (it holds the hash, never the token, so it has
+  no other way to produce a link it can send), so it and the confirmation
+  page's own timer came due at the same instant and whichever won killed the
+  form the customer was filling in. Anyone slower than five minutes at
+  photographing a licence — most people — could get "that link isn't valid any
+  more" on every attempt, on a page that looked fine, forever. The browser now
+  gets a clear run at asking for its own email; the sweep is the net for when
+  it never asked at all. Don't close the gap.
+- **A dead token on the confirmation page recovers itself.** `IdUploadForm`
+  hands a **404** up via `onTokenDead` instead of showing "please try again"
+  about something that can't succeed twice; `IdVerifyPanel` bins the
+  `sessionStorage` token (otherwise every reload rebuilds the same doomed form)
+  and fires `POST /api/bookings/[id]/id-link` for a replacement. That path
+  stays even with the timing fixed — an admin resending is a legitimate way for
+  a token to die under an open page.
 - **A row with no `sent_at` is not "nobody was asked" any more.** `lib/automation.ts`
   distinguishes the two: link issued and shown on the confirmation page vs. no
   link at all. The "Send ID link" admin action still works from either.
