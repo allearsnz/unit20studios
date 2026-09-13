@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check, FileText } from "lucide-react";
 import { VerifyCustomerButton } from "./VerifyCustomerButton";
 import { ResendIdVerificationButton } from "./ResendIdVerificationButton";
 import { formatNZ } from "@/lib/timezone";
@@ -58,8 +58,8 @@ export function IdVerificationPanel({
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <DocumentTile label="Front" url={view.front} />
-            <DocumentTile label="Back" url={view.back} />
+            <DocumentTile label="Front" url={view.front} path={view.verification?.front_path} />
+            <DocumentTile label="Back" url={view.back} path={view.verification?.back_path} />
           </div>
 
           <p className="mt-3 text-xs text-text-dim">
@@ -98,7 +98,27 @@ export function IdVerificationPanel({
   );
 }
 
-function DocumentTile({ label, url }: { label: string; url: string | null }) {
+/**
+ * Formats no browser will put in an `<img>`.
+ *
+ * The upload route accepts PDFs and HEIC on purpose — a scanner emits one and
+ * an iPhone the other, and turning those away would cost real customers their
+ * booking. But Chrome and Firefox render neither, so a successful upload of
+ * either showed up here as an empty broken-image box: indistinguishable, to
+ * whoever was looking at it, from the upload having failed. These get an honest
+ * tile that says what it is and opens in a new tab instead.
+ */
+const NOT_INLINE = /\.(pdf|heic|heif)$/i;
+
+function DocumentTile({
+  label,
+  url,
+  path,
+}: {
+  label: string;
+  url: string | null;
+  path?: string | null;
+}) {
   if (!url) {
     return (
       <div className="flex aspect-[3/2] items-center justify-center border border-dashed border-border bg-bg-elev">
@@ -108,6 +128,27 @@ function DocumentTile({ label, url }: { label: string; url: string | null }) {
       </div>
     );
   }
+
+  const format = path?.match(NOT_INLINE)?.[1]?.toUpperCase();
+  if (format) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex aspect-[3/2] flex-col items-center justify-center gap-2 border border-border bg-bg-elev transition-colors hover:border-border-strong"
+      >
+        <FileText className="h-6 w-6 text-accent" aria-hidden />
+        <span className="font-mono text-[11px] uppercase tracking-meta text-text">
+          {label} · {format}
+        </span>
+        <span className="font-mono text-[11px] uppercase tracking-meta text-text-dim">
+          Open to view
+        </span>
+      </a>
+    );
+  }
+
   return (
     <a
       href={url}

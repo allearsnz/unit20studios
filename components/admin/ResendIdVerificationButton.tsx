@@ -6,6 +6,9 @@ import { resendIdVerification } from "@/app/admin/actions";
 
 const FAILURE_COPY: Record<string, string> = {
   already_verified: "Already verified.",
+  // Unreachable from this button (it forces), but a wrong sentence here would
+  // be worse than a redundant one.
+  already_submitted: "Their ID is already uploaded — approve it above.",
   customer_not_found: "Customer not found.",
   no_email: "No email on file.",
   email_not_configured: "Email isn't configured.",

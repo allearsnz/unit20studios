@@ -87,6 +87,16 @@ export type IdDocumentsResult =
       status: "ok";
       front: string | null;
       back: string | null;
+      /**
+       * What each one actually is — `jpg`, `png`, `heic`, `pdf`. Additive, and
+       * the crew app wants it: a PDF or a HEIC in an `<img>` renders as a
+       * broken box, which reads as "the upload failed" about an upload that
+       * worked perfectly. Both formats are accepted deliberately (scanners emit
+       * the first, iPhones the second), so the viewer is the thing that has to
+       * cope. Anything other than jpg/png/webp needs a link, not an image.
+       */
+      frontFormat: string | null;
+      backFormat: string | null;
       uploadedAt: string | null;
       expiresInSeconds: number;
     }
@@ -139,9 +149,19 @@ export async function idDocumentsForCustomer(customerId: string): Promise<IdDocu
     status: "ok",
     front,
     back,
+    frontFormat: formatOf(row.front_path),
+    backFormat: formatOf(row.back_path),
     uploadedAt: row.submitted_at,
     expiresInSeconds: ID_URL_TTL_SECONDS,
   };
+}
+
+/** The stored extension, which is the only record of the file's type — the
+ *  signed URL is opaque and the row doesn't carry a MIME column. */
+function formatOf(path: string | null): string | null {
+  if (!path) return null;
+  const ext = path.split(".").pop()?.toLowerCase();
+  return ext && ext !== path ? ext : null;
 }
 
 export type VerifyCustomerResult =

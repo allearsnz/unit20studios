@@ -244,10 +244,16 @@ export async function verifyCustomer(customerId: string) {
  * Send (or re-send) the ID upload link. Rotates the token, so the previous
  * link stops working — use it for customers who booked before this existed, or
  * who lost the email.
+ *
+ * Forced, unlike everything automatic: pressing this over a licence that is
+ * already uploaded and waiting means "that one's no good, send me another",
+ * which is a real thing an operator needs to be able to say. The scan itself
+ * survives until the replacement lands (or until you approve), so a misclick
+ * costs an email rather than the evidence.
  */
 export async function resendIdVerification(customerId: string): Promise<RequestResult> {
   await assertAdmin();
-  const result = await requestIdVerification(customerId);
+  const result = await requestIdVerification(customerId, { force: true });
   revalidatePath(`/admin/customers/${customerId}`);
   revalidatePath("/admin/customers");
   // Same reason as verifyCustomer: this button is on the booking page too, and

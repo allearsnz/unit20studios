@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { notifyAdmin } from "@/lib/email";
 import { creditBankedHours } from "@/lib/banked-hours";
 import { requestIdVerification, sweepUnsentIdLinks } from "@/lib/id-verification";
+import { site } from "@/lib/site";
 
 /**
  * Nightly sweep of bookings that never got verified.
@@ -58,6 +59,47 @@ type PendingRow = {
   banked_hours_used: number;
 };
 
+/**
+ * Which of these customers have documents sitting in `id_verifications` waiting
+ * to be looked at. One query, not one per booking.
+ *
+ * Already-verified customers are excluded, and that is not tidiness.
+ * `submitted_at` survives approval (only the images are deleted), so including
+ * them would park a booking whose customer is verified-but-whose-status-never-
+ * caught-up in "waiting on you" forever — instead of letting it fall through to
+ * the branch below that notices and confirms it.
+ */
+async function customersWithSubmittedId(
+  supabase: ReturnType<typeof createAdminClient>,
+  customerIds: string[],
+): Promise<Set<string>> {
+  if (customerIds.length === 0) return new Set();
+  const { data, error } = await supabase
+    .from("id_verifications")
+    .select("customer_id, customer:customers(id_verified)")
+    .in("customer_id", Array.from(new Set(customerIds)))
+    .not("submitted_at", "is", null);
+  if (error) {
+    // Can't tell who has uploaded, so assume everyone has. Holding a slot one
+    // more night is recoverable; cancelling the booking of someone who did what
+    // we asked is not, and that failure is what this whole guard exists for.
+    console.error("[cron/cleanup] submitted-ID lookup failed — holding everything", error);
+    return new Set(customerIds);
+  }
+
+  type Row = {
+    customer_id: string;
+    customer: { id_verified: boolean } | { id_verified: boolean }[] | null;
+  };
+  const submitted = new Set<string>();
+  for (const row of (data as Row[] | null) ?? []) {
+    const c = Array.isArray(row.customer) ? row.customer[0] : row.customer;
+    if (c?.id_verified) continue;
+    submitted.add(row.customer_id);
+  }
+  return submitted;
+}
+
 export async function GET(req: NextRequest) {
   if (!authorizeCron(req)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   try {
@@ -89,6 +131,22 @@ export async function GET(req: NextRequest) {
     const warned: string[] = [];
     const released: PendingRow[] = [];
     const heldBackImminent: PendingRow[] = [];
+    const awaitingApproval: PendingRow[] = [];
+
+    // Who has already sent their documents in. `pending_verification` means "we
+    // haven't checked yet" — it says nothing about whether the customer has
+    // done their part, and this is the difference between the two.
+    //
+    // Without it the ladder punished the wrong people. Someone who uploaded
+    // their licence within the hour still got chased at 24h (the chase rotated
+    // their link and, until this was fixed, deleted the scan), and if the
+    // approval hadn't happened 48h after that their booking was cancelled
+    // outright. Every step of that reads to the customer as the ID upload not
+    // working — which is exactly what they were telling us.
+    const submittedCustomerIds = await customersWithSubmittedId(
+      supabase,
+      pending.map((b) => b.customer_id),
+    );
 
     for (const b of pending) {
       const startsIn = new Date(b.start_time).getTime() - now;
@@ -98,6 +156,21 @@ export async function GET(req: NextRequest) {
       // session about to happen is never auto-cancelled — if someone turns up
       // unverified that is a conversation at the door, not a silent deletion.
       if (startsIn <= 0) continue;
+
+      // They've uploaded; the ball is on this side of the net. Never chase it,
+      // and never release the slot over it — the only thing outstanding is a
+      // decision only a human can make, so tell the human instead.
+      //
+      // Checked ahead of the imminent-session branch on purpose. Both hold the
+      // booking, but they say different things to whoever reads the email, and
+      // "they've done their part, you haven't" is the more urgent of the two
+      // when the session is tomorrow — not something to file under "still
+      // unverified".
+      if (submittedCustomerIds.has(b.customer_id)) {
+        awaitingApproval.push(b);
+        continue;
+      }
+
       if (startsIn < IMMINENT_H * HOURS) {
         heldBackImminent.push(b);
         continue;
@@ -119,6 +192,10 @@ export async function GET(req: NextRequest) {
           // Verified since booking but the status never caught up — confirm it
           // rather than chasing them for something they've already sent.
           await supabase.from("bookings").update({ status: "confirmed" }).eq("id", b.id);
+        } else if (res.status === "skipped" && res.reason === "already_submitted") {
+          // Uploaded between the batch read above and this call. Same answer as
+          // the guard: it's on us now, so don't start the release clock.
+          awaitingApproval.push(b);
         }
         continue;
       }
@@ -149,7 +226,7 @@ export async function GET(req: NextRequest) {
     // Tell a human. A slot going back on sale is a commercial event, and the
     // whole reason this incident was invisible for four days is that nothing
     // here ever spoke.
-    if (released.length || heldBackImminent.length) {
+    if (released.length || heldBackImminent.length || awaitingApproval.length) {
       const lines: string[] = [];
       if (released.length) {
         lines.push(
@@ -170,6 +247,19 @@ export async function GET(req: NextRequest) {
           ),
         );
       }
+      // Top of the list in practice: these are the ones where the customer has
+      // finished and we haven't. They are never chased and never released, so
+      // this note is the only thing that will ever mention them.
+      if (awaitingApproval.length) {
+        lines.push(
+          "",
+          "ID UPLOADED, WAITING ON YOU — not chased, not released, nothing will happen until you approve:",
+          ...awaitingApproval.map(
+            (b) =>
+              `  ${b.friendly_id} · ${new Date(b.start_time).toLocaleString("en-NZ", { timeZone: "Pacific/Auckland" })}\n    ${site.url}/admin/bookings/${b.id}`,
+          ),
+        );
+      }
       await notifyAdmin("Studio — unverified bookings", lines.join("\n"));
     }
 
@@ -179,6 +269,7 @@ export async function GET(req: NextRequest) {
       warned: warned.length,
       released: released.length,
       held_back_imminent: heldBackImminent.length,
+      awaiting_approval: awaitingApproval.length,
       // `deleted` is kept at 0 so any dashboard or log filter watching the old
       // field doesn't silently read "nothing happened" forever.
       deleted: 0,

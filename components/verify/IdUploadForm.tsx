@@ -3,10 +3,91 @@
 import { useRef, useState } from "react";
 import { Check, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ACCEPT_ATTR, MAX_UPLOAD_BYTES, resolveUploadMime } from "@/lib/id-upload";
 
 type DocType = "drivers_licence" | "passport";
 
-const ACCEPT = "image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf";
+const MAX_MB = Math.round(MAX_UPLOAD_BYTES / 1024 / 1024);
+
+/**
+ * Say no here, not after the upload.
+ *
+ * The server checks all of this anyway — it has to, nothing from a browser is
+ * trustworthy — but a phone on mobile data can spend the better part of a
+ * minute pushing an oversized photo up before the answer comes back, and an
+ * error that arrives after a long wait reads as the thing being broken rather
+ * than the file being wrong. Same rules, same module, so the two can't drift.
+ */
+/**
+ * Shrink a phone photo before it goes anywhere near the network.
+ *
+ * A modern phone camera produces a 4–12MB image of a driver licence, and every
+ * one of those megabytes is a way for this to fail: a long upload on mobile
+ * data that looks like a hang, a pair of them in one request pushing at limits
+ * nobody here controls, and a spinner the customer eventually gives up on. None
+ * of it buys anything — the check is a human reading a name, a date and a face,
+ * and 2200px on the long edge is far more than that needs.
+ *
+ * Entirely best-effort, and that is the important property. Anything that goes
+ * wrong — a format the browser can't decode (Chrome still can't read HEIC), no
+ * canvas, a blob that comes back bigger than what went in — returns the
+ * original file and lets the server deal with it exactly as before. It can make
+ * the upload smaller; it can never make it fail.
+ */
+const MAX_EDGE_PX = 2200;
+/** Below this, re-encoding costs detail and saves nothing worth having. */
+const SHRINK_ABOVE_BYTES = 1.5 * 1024 * 1024;
+
+async function shrink(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") && !/\.(jpe?g|png|webp|heic|heif)$/i.test(file.name)) {
+    return file; // A PDF. Leave it alone.
+  }
+  if (file.size <= SHRINK_ABOVE_BYTES) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, MAX_EDGE_PX / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, "image/jpeg", 0.88),
+    );
+    if (!blob || blob.size >= file.size) return file;
+
+    const base = file.name.replace(/\.[^.]+$/, "") || "id";
+    return new File([blob], `${base}.jpg`, { type: "image/jpeg" });
+  } catch {
+    return file;
+  }
+}
+
+function genericError(status: number): string {
+  if (status === 413) {
+    return `Those photos were too large to send. Try one side at a time, or take them at a lower resolution.`;
+  }
+  if (status === 429) return "Too many attempts just now — wait a minute and try again.";
+  if (status >= 500) {
+    return "Our end had a problem saving that. Try once more, and email studio@unit20.nz if it happens again.";
+  }
+  return "Something went wrong. Please try again.";
+}
+
+function localProblem(file: File, label: string): string | null {
+  if (file.size === 0) return `That ${label} file came through empty — try picking it again.`;
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return `That ${label} photo is ${(file.size / 1024 / 1024).toFixed(1)}MB — over the ${MAX_MB}MB limit. Take it again at a lower resolution, or crop it.`;
+  }
+  if (!resolveUploadMime(file)) {
+    return `We can't read that ${label} file. Send a photo (JPG, PNG or HEIC) or a PDF.`;
+  }
+  return null;
+}
 
 export function IdUploadForm({
   token,
@@ -41,15 +122,37 @@ export function IdUploadForm({
   const backRequired = docType === "drivers_licence";
   const canSubmit = !!front && (!backRequired || !!back) && !busy;
 
+  const pick = (side: "front" | "back", file: File | null) => {
+    const set = side === "front" ? setFront : setBack;
+    if (!file) {
+      set(null);
+      return;
+    }
+    const problem = localProblem(file, side);
+    if (problem) {
+      set(null);
+      setError(problem);
+      topRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    setError(null);
+    set(file);
+  };
+
   const submit = async () => {
     if (!front) return;
     setBusy(true);
     setError(null);
     try {
+      // Resized here rather than at pick time: the customer can swap a photo
+      // twice before they're happy, and there's no reason to spend their phone's
+      // battery on the ones they discard.
+      const [frontFile, backFile] = await Promise.all([shrink(front), back ? shrink(back) : null]);
+
       const body = new FormData();
       body.set("docType", docType);
-      body.set("front", front);
-      if (back) body.set("back", back);
+      body.set("front", frontFile);
+      if (backFile) body.set("back", backFile);
 
       const res = await fetch(`/api/verify-id/${encodeURIComponent(token)}`, {
         method: "POST",
@@ -65,7 +168,11 @@ export function IdUploadForm({
           setBusy(false);
           return;
         }
-        setError(data.error || "Something went wrong. Please try again.");
+        // `data.error` is missing whenever the response never reached our code
+        // — a platform-level rejection answers in HTML, and "Something went
+        // wrong" about it is a support ticket with nothing in it. Say which
+        // kind of wrong, so the next thing they try might actually work.
+        setError(data.error || genericError(res.status));
         setBusy(false);
         topRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
@@ -144,12 +251,12 @@ export function IdUploadForm({
         <FilePicker
           label={docType === "passport" ? "Photo page" : "Front"}
           file={front}
-          onPick={setFront}
+          onPick={(f) => pick("front", f)}
         />
         <FilePicker
           label={docType === "passport" ? "Second page (optional)" : "Back"}
           file={back}
-          onPick={setBack}
+          onPick={(f) => pick("back", f)}
           optional={!backRequired}
         />
       </div>
@@ -215,9 +322,16 @@ function FilePicker({
       <input
         id={id}
         type="file"
-        accept={ACCEPT}
+        accept={ACCEPT_ATTR}
         className="sr-only"
-        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
+        onChange={(e) => {
+          onPick(e.target.files?.[0] ?? null);
+          // Clear the input, not the state. Without this a rejected file is
+          // still the input's value, so choosing the very same photo again
+          // fires no `change` event at all and the picker looks dead — the
+          // File itself is held in state, which is what the label reads.
+          e.target.value = "";
+        }}
       />
     </div>
   );

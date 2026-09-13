@@ -5,6 +5,7 @@ import IdVerificationRequest from "@/emails/IdVerificationRequest";
 import { sendEmail } from "./email";
 import { createAdminClient } from "./supabase/admin";
 import { ON_PAGE_GRACE_MS } from "./id-handoff";
+import { EXTENSION } from "./id-upload";
 import { site } from "./site";
 import type { Customer, IdVerification } from "./types";
 
@@ -23,17 +24,11 @@ export const ID_BUCKET = "id-documents";
  *  pointless; short enough that an old inbox isn't a standing liability. */
 const LINK_TTL_DAYS = 30;
 
-/** Accepted uploads. Phones shoot HEIC, scanners emit PDF — take both. */
-export const ACCEPTED_MIME = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "image/heic",
-  "image/heif",
-  "application/pdf",
-] as const;
-
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// The rules about the files themselves live in `lib/id-upload.ts`, which has no
+// server-only imports, so the upload form can hold the browser to exactly the
+// same limits this route enforces. Re-exported here because this is where every
+// server caller already looks.
+export { ACCEPTED_MIME, MAX_UPLOAD_BYTES, resolveUploadMime } from "./id-upload";
 
 /**
  * How long a minted-but-unsent link sits before the server posts one itself.
@@ -60,15 +55,6 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
  */
 export const SWEEP_AFTER_MS = 6 * ON_PAGE_GRACE_MS; // 30 minutes
 
-const EXTENSION: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/heic": "heic",
-  "image/heif": "heif",
-  "application/pdf": "pdf",
-};
-
 export type DocType = "drivers_licence" | "passport";
 
 /** The token lives in the customer's inbox; only its hash is ever stored. */
@@ -86,10 +72,34 @@ const CUSTOMER_FIELDS = "id, name, email, id_verified";
 
 export type RequestResult =
   | { status: "sent"; email: string }
-  | { status: "skipped"; reason: "already_verified" | "customer_not_found" | "no_email" }
+  | {
+      status: "skipped";
+      reason: "already_verified" | "already_submitted" | "customer_not_found" | "no_email";
+    }
   | { status: "failed"; reason: string };
 
-/** Mint a fresh token onto the customer's row, killing whatever was there. */
+/**
+ * Mint a fresh token onto the customer's row, retiring whatever was there.
+ *
+ * IT ROTATES THE TOKEN AND NOTHING ELSE. It used to also delete the stored
+ * images and blank `submitted_at`, on the reasoning that a new link means a new
+ * submission — and that was the bug behind "I sent my ID days ago and they keep
+ * asking for it". Three ordinary events rotate a token: the customer books a
+ * second session, the nightly cleanup chases an unconfirmed booking, an admin
+ * resends. Every one of them silently destroyed a licence scan that was sitting
+ * there waiting to be approved, and left the admin panel reading "nothing
+ * uploaded yet" about someone who had done exactly what was asked.
+ *
+ * Nothing needed it. A *new* upload supersedes the old one in the upload route,
+ * which deletes the images it replaces, and approval deletes them too — so the
+ * two moments that should clear a submission both already do, and neither is
+ * this one. Clearing it here only ever threw away the good copy.
+ *
+ * `sent_at` still resets, because that is the token's own bookkeeping: it means
+ * "an email carrying *this* link has left", which a rotation makes false again,
+ * and `sweepUnsentIdLinks` reads it to find people who were issued a link and
+ * never got one.
+ */
 async function rotateToken(
   supabase: SupabaseClient,
   customerId: string,
@@ -97,33 +107,11 @@ async function rotateToken(
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + LINK_TTL_DAYS * 24 * 3600 * 1000).toISOString();
 
-  // Rotate the token and clear any previous submission: whatever they upload
-  // through the new link is what the admin should be looking at.
-  const { data: existing } = await supabase
-    .from("id_verifications")
-    .select("id, send_count, front_path, back_path")
-    .eq("customer_id", customerId)
-    .maybeSingle();
-  const prior = existing as Pick<
-    IdVerification,
-    "id" | "send_count" | "front_path" | "back_path"
-  > | null;
-
-  if (prior) await removeStoredDocuments(supabase, prior);
-
   const { error } = await supabase.from("id_verifications").upsert(
     {
       customer_id: customerId,
       token_hash: hashToken(token),
       expires_at: expiresAt,
-      front_path: null,
-      back_path: null,
-      doc_type: null,
-      submitted_at: null,
-      // Unsent, on purpose. `sent_at` is now a record of an email that actually
-      // left, which is what makes `sweepUnsentIdLinks` able to find the people
-      // who were issued a link and never got one — the exact hole this whole
-      // change exists to close.
       sent_at: null,
       updated_at: new Date().toISOString(),
     },
@@ -131,6 +119,26 @@ async function rotateToken(
   );
   if (error) return { error: error.message };
   return { token };
+}
+
+/**
+ * Has this customer already sent their documents in and had no answer yet?
+ *
+ * The guard in front of every rotation that isn't an operator explicitly asking
+ * for a new photo. "Unverified" and "hasn't uploaded" are different states, and
+ * conflating them is what let the cron chase — and eventually release the slot
+ * of — someone whose licence was sitting in the admin panel the whole time.
+ */
+async function pendingSubmission(
+  supabase: SupabaseClient,
+  customerId: string,
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("id_verifications")
+    .select("submitted_at")
+    .eq("customer_id", customerId)
+    .maybeSingle();
+  return !!(data as Pick<IdVerification, "submitted_at"> | null)?.submitted_at;
 }
 
 /** Email one specific token and stamp the send. Callers own the token's life. */
@@ -191,8 +199,18 @@ async function loadCustomer(
  * `createIdVerificationLink` instead.
  *
  * Never throws: an email problem must not cost someone their slot.
+ *
+ * `force` is the difference between a machine chasing someone and an operator
+ * asking for a new photo. Unforced, this will not touch a customer who has
+ * already uploaded and is waiting on a decision — chasing them is wrong, and
+ * before the guard existed it also retired the link their still-open page was
+ * using. Forced, it does what the admin pressed the button for: the old scan
+ * was blurry, the wrong document, or the wrong person, and they want another.
  */
-export async function requestIdVerification(customerId: string): Promise<RequestResult> {
+export async function requestIdVerification(
+  customerId: string,
+  { force = false }: { force?: boolean } = {},
+): Promise<RequestResult> {
   try {
     const supabase = createAdminClient();
     const customer = await loadCustomer(supabase, customerId);
@@ -200,6 +218,9 @@ export async function requestIdVerification(customerId: string): Promise<Request
     if (!customer) return { status: "skipped", reason: "customer_not_found" };
     if (customer.id_verified) return { status: "skipped", reason: "already_verified" };
     if (!customer.email) return { status: "skipped", reason: "no_email" };
+    if (!force && (await pendingSubmission(supabase, customerId))) {
+      return { status: "skipped", reason: "already_submitted" };
+    }
 
     const minted = await rotateToken(supabase, customerId);
     if ("error" in minted) return { status: "failed", reason: minted.error };
@@ -213,7 +234,10 @@ export async function requestIdVerification(customerId: string): Promise<Request
 
 export type CreateLinkResult =
   | { status: "ready"; token: string }
-  | { status: "skipped"; reason: "already_verified" | "customer_not_found" | "no_email" }
+  | {
+      status: "skipped";
+      reason: "already_verified" | "already_submitted" | "customer_not_found" | "no_email";
+    }
   | { status: "failed"; reason: string };
 
 /**
@@ -237,6 +261,14 @@ export async function createIdVerificationLink(customerId: string): Promise<Crea
     // a link that only exists on one page — the admin gets the usual "no link
     // has gone out" flag instead.
     if (!customer.email) return { status: "skipped", reason: "no_email" };
+    // Already sent their documents in and waiting on us. This fires on a second
+    // booking made before the first was approved: there is nothing for them to
+    // upload, and minting a link would put a form in front of someone who has
+    // finished. The confirmation page reads the same row and says "we've got
+    // your ID" instead.
+    if (await pendingSubmission(supabase, customerId)) {
+      return { status: "skipped", reason: "already_submitted" };
+    }
 
     const minted = await rotateToken(supabase, customerId);
     if ("error" in minted) return { status: "failed", reason: minted.error };

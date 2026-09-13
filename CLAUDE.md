@@ -223,6 +223,48 @@ Points worth knowing before changing any of it:
   who reopens the confirmation page in a tab that has no token; it takes a
   booking reference and can only ever send the customer's own link to the
   customer's own address.
+- **Rotating a token changes the token and nothing else.** It used to also
+  delete the stored images and blank `submitted_at`, and that was the "I sent my
+  ID days ago and you keep asking" fault: three ordinary events rotate a token —
+  a second booking by the same unverified customer, the nightly chase, an admin
+  resend — and each of them destroyed a licence scan that was sitting there
+  waiting to be approved, leaving the panel reading "nothing uploaded yet". The
+  two moments that *should* clear a submission already do it themselves: a new
+  upload supersedes the old (the upload route deletes what it replaces) and
+  approval deletes both. Don't put it back.
+- **"Unverified" and "hasn't uploaded" are different states.** `requestIdVerification`
+  and `createIdVerificationLink` both refuse when `submitted_at` is set, so
+  nothing automatic chases someone who has already done their part.
+  `requestIdVerification(id, { force: true })` is the operator override — the
+  admin action and the crew route pass it, because "that photo's no good, send
+  another" is a real thing to want. Booking creation and the cron never do.
+- **The cleanup cron will not release a booking whose customer has uploaded.**
+  It used to: chase at 24h, cancel 48h after that, on a booking whose scan was
+  in the panel the whole time. Those now skip the ladder entirely and go into an
+  **ID UPLOADED, WAITING ON YOU** block in the nightly admin email — held, never
+  chased, never released, because the only outstanding step is a human decision.
+  If the lookup itself fails it assumes *everyone* has uploaded: holding a slot
+  one more night is recoverable, cancelling on someone who complied isn't.
+- **`File.type` is not to be trusted, and `lib/id-upload.ts` is where that's
+  handled.** Android's document picker and several in-app browsers hand over an
+  empty or `application/octet-stream` type for an ordinary phone photo, and the
+  old check compared that string straight against the accepted list — so a good
+  licence photo got "that file isn't a supported type", unfixable from the
+  customer's end and invisible in the logs beyond a 422. `resolveUploadMime()`
+  falls back to the file extension, and its answer drives the type check, the
+  storage `contentType` *and* the stored path's extension, so the bucket's
+  `allowed_mime_types` can't disagree with the route. That module is deliberately
+  free of `node:`/Supabase imports so the form enforces the same rules.
+- **The form shrinks photos before sending** (2200px long edge, JPEG q0.88,
+  only above 1.5MB, PDFs untouched). Best-effort in every direction — anything
+  that throws sends the original. A 12MP licence photo was 4–12MB of upload over
+  mobile data for a check that is a human reading a name and a face.
+- **HEIC and PDF are accepted, so the viewer has to cope with them.** Neither
+  renders in an `<img>` in Chrome or Firefox: a successful upload of either used
+  to show the admin an empty broken box, which reads as a failed upload. The
+  admin panel gives those a labelled open-in-new-tab tile instead, and
+  `idDocumentsForCustomer` returns `frontFormat`/`backFormat` so the crew app
+  can do the same.
 - **Images live in the private `id-documents` bucket**, RLS-denied to everyone;
   the admin sees them through 5-minute signed URLs minted server-side. There is
   no unauthenticated read path.

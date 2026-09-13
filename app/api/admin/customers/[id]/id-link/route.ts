@@ -35,7 +35,11 @@ export async function POST(
     return crewJson(req, { error: "That customer reference isn't valid." }, 422);
   }
 
-  const result = await requestIdVerification(id);
+  // Forced, like the admin server action it mirrors: a crew member pressing
+  // "resend" over an upload that is already sitting there is asking for a
+  // better photo, not being told there's nothing to do. The automatic callers
+  // (booking creation, the nightly chase) leave a pending submission alone.
+  const result = await requestIdVerification(id, { force: true });
 
   switch (result.status) {
     case "sent":
@@ -51,6 +55,15 @@ export async function POST(
       }
       if (result.reason === "already_verified") {
         return crewJson(req, { error: "This customer is already ID-verified." }, 409);
+      }
+      if (result.reason === "already_submitted") {
+        // Unreachable while this call is forced — kept so that flipping that
+        // back doesn't quietly start reporting it as a missing email address.
+        return crewJson(
+          req,
+          { error: "Their ID is already uploaded and waiting to be approved." },
+          409,
+        );
       }
       return crewJson(
         req,

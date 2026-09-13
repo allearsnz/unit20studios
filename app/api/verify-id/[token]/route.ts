@@ -4,12 +4,12 @@ import { notifyAdmin } from "@/lib/email";
 import { rateLimit } from "@/lib/rate-limit";
 import { site } from "@/lib/site";
 import {
-  ACCEPTED_MIME,
   ID_BUCKET,
   MAX_UPLOAD_BYTES,
   type DocType,
   documentPath,
   removeStoredDocuments,
+  resolveUploadMime,
   verificationByToken,
 } from "@/lib/id-verification";
 
@@ -21,15 +21,39 @@ const DOC_LABEL: Record<DocType, string> = {
   passport: "Passport",
 };
 
-function badFile(file: File | null, label: string): string | null {
-  if (!file || file.size === 0) return `Please choose a ${label} image.`;
+type Checked = { mime: string } | { error: string };
+
+/**
+ * Size and type, resolved together.
+ *
+ * The type is worked out by `resolveUploadMime` rather than read straight off
+ * `File.type`, because a real phone photo turns up unlabelled often enough to
+ * have been a live fault: an empty or `application/octet-stream` type got the
+ * customer "that file isn't a supported type" about a perfectly ordinary
+ * licence photo, with nothing in the logs but a 422 and no way for them to fix
+ * it. Whatever comes back is then used for the stored `contentType` too, so the
+ * bucket's own `allowed_mime_types` sees the same answer this did.
+ */
+function checkFile(file: File | null, label: string): Checked {
+  if (!file || file.size === 0) return { error: `Please choose a ${label} image.` };
   if (file.size > MAX_UPLOAD_BYTES) {
-    return `That ${label} image is over ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB — try a smaller photo.`;
+    return {
+      error: `That ${label} image is over ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)}MB — try a smaller photo.`,
+    };
   }
-  if (!(ACCEPTED_MIME as readonly string[]).includes(file.type)) {
-    return `That ${label} file isn't a supported type — use a photo (JPG, PNG, HEIC) or a PDF.`;
+  const mime = resolveUploadMime(file);
+  if (!mime) {
+    console.warn("[verify-id] unrecognised upload", {
+      label,
+      declaredType: file.type,
+      name: file.name,
+      size: file.size,
+    });
+    return {
+      error: `That ${label} file isn't a supported type — use a photo (JPG, PNG, HEIC) or a PDF.`,
+    };
   }
-  return null;
+  return { mime };
 }
 
 export async function POST(
@@ -40,8 +64,14 @@ export async function POST(
 
   // Cheap brute-force guard on the token space, plus a cap on how often one
   // link can be used at all.
+  //
+  // Every attempt counts, including the ones we reject — so the budget has to
+  // be big enough to absorb a customer fumbling with formats and file sizes,
+  // twice, on a phone. At ten they could be locked out for ten minutes by their
+  // own mistakes, which reads as the upload being broken. It's still nowhere
+  // near enough to walk a 256-bit token space.
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
-  if (!rateLimit(`verify-id:${ip}`, 10, 10 * 60 * 1000)) {
+  if (!rateLimit(`verify-id:${ip}`, 25, 10 * 60 * 1000)) {
     return NextResponse.json({ error: "Too many attempts. Try again shortly." }, { status: 429 });
   }
 
@@ -75,24 +105,31 @@ export async function POST(
   const front = form.get("front") as File | null;
   const back = form.get("back") as File | null;
 
-  const frontError = badFile(front, "front");
-  if (frontError) return NextResponse.json({ error: frontError }, { status: 422 });
+  const frontCheck = checkFile(front, "front");
+  if ("error" in frontCheck) {
+    return NextResponse.json({ error: frontCheck.error }, { status: 422 });
+  }
   // Passports are one page — the back is optional there, required on a licence.
   const backRequired = docType === "drivers_licence";
-  if (backRequired || (back && back.size > 0)) {
-    const backError = badFile(back, "back");
-    if (backError) return NextResponse.json({ error: backError }, { status: 422 });
+  const sendingBack = backRequired || !!(back && back.size > 0);
+  let backMime: string | null = null;
+  if (sendingBack) {
+    const backCheck = checkFile(back, "back");
+    if ("error" in backCheck) {
+      return NextResponse.json({ error: backCheck.error }, { status: 422 });
+    }
+    backMime = backCheck.mime;
   }
 
   const supabase = createAdminClient();
 
   // Write the new images before touching the row, so a failed upload leaves the
   // previous (working) submission intact rather than a half-updated record.
-  const upload = async (file: File, side: "front" | "back") => {
-    const path = documentPath(customer.id, side, file.type);
+  const upload = async (file: File, side: "front" | "back", mime: string) => {
+    const path = documentPath(customer.id, side, mime);
     const { error } = await supabase.storage
       .from(ID_BUCKET)
-      .upload(path, file, { contentType: file.type, upsert: false });
+      .upload(path, file, { contentType: mime, upsert: false });
     if (error) throw new Error(error.message);
     return path;
   };
@@ -100,8 +137,10 @@ export async function POST(
   let frontPath: string;
   let backPath: string | null = null;
   try {
-    frontPath = await upload(front as File, "front");
-    if (back && back.size > 0) backPath = await upload(back, "back");
+    frontPath = await upload(front as File, "front", frontCheck.mime);
+    if (back && back.size > 0 && backMime) {
+      backPath = await upload(back, "back", backMime);
+    }
   } catch (err) {
     console.error("[verify-id] upload failed", { customerId: customer.id, err });
     return NextResponse.json(
