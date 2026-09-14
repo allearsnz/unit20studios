@@ -479,15 +479,31 @@ Things to know before changing any of it:
 - The crew app ships with `VITE_STUDIO_API_URL` **unset**, and while it is unset
   those screens render a link to `/admin` rather than a button. Setting it is
   what turns these on.
+- **A seventh route takes money (Sep 2026).** `POST
+  /api/admin/bookings/:id/payment-link` returns a Stripe Checkout URL for the
+  booking's **GST-inclusive** total. It is not a second way to mark something
+  paid: the customer pays, `/api/webhooks/stripe` writes
+  `payment_status = 'paid'`, and the door code and access email follow the path
+  they already follow. `docs/STRIPE.md` is the whole story, including the five
+  things not to break and how to rehearse it in test mode. Inert until
+  `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` are set — the route answers 503
+  and the crew app says so, rather than erroring.
 
 ## Current state / known gaps
 
+- **Stripe is built but OFF in production** — two secrets away. `docs/STRIPE.md`.
 - **Xero is code-complete but OFF in production.** The four `XERO_*` env vars
   aren't set in Vercel, so the client throws "Xero API not configured" and the
-  webhook can't validate signatures. Invoices are created manually for now. See
-  `XERO-TODO.md` (interim state) and `docs/PLAN-xero-invoicing.md` (the full
-  design for switching it on). Note the crew app has its own studio-invoicing
-  path (crew migration `0057`) — check both before changing invoicing.
+  webhook can't validate signatures. Invoices are created manually for now.
+  **Read `docs/PLAN-xero.md` before building anything here**: it argues against
+  invoice-per-booking with the live figures (a studio session is $50–110 against
+  an average AV invoice of ~$1,500, so per-booking would roughly double the
+  invoice count for ~3% of revenue) and recommends a **weekly summary invoice,
+  one contact**. Its §8 is eight decisions only Will can make, and four of them
+  gate the build. `XERO-TODO.md` is the interim state and
+  `docs/PLAN-xero-invoicing.md` the API research. Note the crew app has its own
+  studio-invoicing path (crew migration `0057`) — check both before changing
+  invoicing.
 - **Photography is gradient placeholders** — swap to `next/image` where marked.
 - **The 3D scene** falls back to a static SVG under reduced-motion, no WebGL, or
   SSR.
