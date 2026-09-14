@@ -40,6 +40,13 @@ export async function GET(
       return crewJson(req, {
         front: result.front,
         back: result.back,
+        // What each file actually is. The signed URL is opaque and carries no
+        // extension, so without this the only way to render a document is to
+        // guess it's an image — and a PDF or a HEIC in an `<img>` is a broken
+        // box, which reads as a failed upload rather than a viewer that can't
+        // display it. Both formats are accepted deliberately.
+        frontFormat: result.frontFormat,
+        backFormat: result.backFormat,
         uploadedAt: result.uploadedAt,
         expiresInSeconds: result.expiresInSeconds,
       });
